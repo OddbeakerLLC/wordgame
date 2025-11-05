@@ -153,19 +153,33 @@ class HeadTTSService {
   async playAudio(audioData) {
     return new Promise(async (resolve, reject) => {
       try {
+        console.log('HeadTTS: Audio data type:', typeof audioData, audioData?.constructor?.name);
+
         // Convert to ArrayBuffer if needed
         let arrayBuffer;
 
         if (audioData instanceof Blob) {
           // Convert Blob to ArrayBuffer
+          console.log('HeadTTS: Converting Blob to ArrayBuffer');
           arrayBuffer = await audioData.arrayBuffer();
         } else if (audioData instanceof ArrayBuffer) {
+          console.log('HeadTTS: Already ArrayBuffer');
           arrayBuffer = audioData;
-        } else if (audioData.buffer instanceof ArrayBuffer) {
+        } else if (audioData?.buffer instanceof ArrayBuffer) {
           // Typed array (Uint8Array, etc.)
+          console.log('HeadTTS: Converting TypedArray to ArrayBuffer');
           arrayBuffer = audioData.buffer;
+        } else if (audioData?.data instanceof ArrayBuffer) {
+          // HeadTTS might wrap it in an object with a data property
+          console.log('HeadTTS: Extracting ArrayBuffer from data property');
+          arrayBuffer = audioData.data;
+        } else if (audioData?.data?.buffer instanceof ArrayBuffer) {
+          // HeadTTS might wrap TypedArray in data property
+          console.log('HeadTTS: Extracting ArrayBuffer from data.buffer');
+          arrayBuffer = audioData.data.buffer;
         } else {
-          reject(new Error("Unsupported audio data format"));
+          console.error('HeadTTS: Unsupported audio data format:', audioData);
+          reject(new Error("Unsupported audio data format: " + typeof audioData));
           return;
         }
 

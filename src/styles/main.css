@@ -1,0 +1,88 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply font-kid;
+  }
+
+  * {
+    @apply transition-colors duration-200;
+  }
+}
+
+@layer components {
+  .letter-box {
+    @apply w-12 h-16 sm:w-16 sm:h-20 md:w-20 md:h-24
+           border-4 border-primary-400 rounded-lg
+           flex items-center justify-center
+           text-3xl sm:text-4xl md:text-5xl font-bold
+           bg-white shadow-lg
+           transition-all duration-300;
+  }
+
+  .letter-box.filled {
+    @apply bg-primary-100 border-primary-600 scale-105;
+  }
+
+  .letter-box.error {
+    @apply bg-red-100 border-red-500 animate-shake;
+  }
+
+  .letter-box.correct {
+    @apply bg-green-100 border-green-500;
+  }
+
+  .btn-primary {
+    @apply px-6 py-3 bg-primary-600 text-white rounded-xl
+           font-bold text-lg shadow-lg
+           hover:bg-primary-700 hover:scale-105
+           active:scale-95
+           transition-all duration-200;
+  }
+
+  .btn-secondary {
+    @apply px-6 py-3 bg-white text-primary-600 rounded-xl
+           font-bold text-lg shadow-lg border-2 border-primary-600
+           hover:bg-primary-50 hover:scale-105
+           active:scale-95
+           transition-all duration-200;
+  }
+
+  .card {
+    @apply bg-white rounded-2xl shadow-xl p-6 border-2 border-primary-200;
+  }
+}
+
+@layer utilities {
+  .animate-shake {
+    animation: shake 0.5s;
+  }
+
+  .animate-bounce-in {
+    animation: bounceIn 0.6s;
+  }
+
+  .animate-celebration {
+    animation: celebration 1s;
+  }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+  20%, 40%, 60%, 80% { transform: translateX(5px); }
+}
+
+@keyframes bounceIn {
+  0% { transform: scale(0); }
+  50% { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+
+@keyframes celebration {
+  0%, 100% { transform: rotate(0deg) scale(1); }
+  25% { transform: rotate(-10deg) scale(1.1); }
+  75% { transform: rotate(10deg) scale(1.1); }
+}

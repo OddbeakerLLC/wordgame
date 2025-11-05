@@ -166,7 +166,6 @@ async function renderQuizWord(
 
   // Speak the word
   await tts.speak("Spell:");
-  await sleep(300);
   await tts.speakWord(word.text);
 
   // Set up practice state

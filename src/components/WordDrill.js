@@ -247,9 +247,8 @@ async function renderPractice(
     </div>
   `;
 
-  // Speak "Now you try! Spell: {word}"
-  await tts.speak("Now you try!");
-  await tts.speak(`Spell: ${word.text}`);
+  // Speak "Now you try! Spell: {word}" as a single phrase
+  await tts.speak(`Now you try! Spell: ${word.text}`);
 
   // Set up practice state
   const practiceState = {

@@ -56,8 +56,6 @@ class TTSService {
           || voicePool.find(v => v.lang.startsWith('en'))
           || voicePool[0];
 
-        console.log('Web Speech API initialized with voice:', this.voice?.name, '(local:', this.voice?.localService + ')');
-
         this.initialized = true;
         this.initializing = false;
         resolve();
@@ -74,16 +72,13 @@ class TTSService {
     // This allows the app to start quickly while neural TTS loads
     if (this.useNeural && !this.neuralInitStarted) {
       this.neuralInitStarted = true;
-      console.log('TTS: Starting HeadTTS initialization in background...');
 
       headttsService.init().then((success) => {
-        if (success) {
-          console.log('TTS: HeadTTS (neural) ready! Will use for better pronunciation.');
-        } else {
-          console.log('TTS: HeadTTS failed to load, using Web Speech API only.');
+        if (!success) {
+          console.warn('HeadTTS failed to load');
         }
       }).catch((error) => {
-        console.log('TTS: HeadTTS initialization error:', error);
+        console.error('HeadTTS initialization error:', error);
       });
     }
   }
@@ -106,23 +101,17 @@ class TTSService {
     // Try HeadTTS (neural) for words only if available
     if (!isSingleLetter && this.useNeural && headttsService.isAvailable()) {
       try {
-        console.log('TTS: Using HeadTTS (neural) for word:', text);
         // Convert rate to speed (Web Speech uses 0.1-10, HeadTTS uses 0.25-4)
         const speed = options.rate ? Math.min(4, Math.max(0.25, options.rate)) : 1;
         await headttsService.speak(text, { speed });
         return;
       } catch (error) {
-        console.warn('HeadTTS failed, falling back to Web Speech API:', error);
+        console.warn('HeadTTS failed:', error);
         // Fall through to Web Speech API
       }
     }
 
     // Use Web Speech API for letters or if HeadTTS unavailable
-    if (isSingleLetter) {
-      console.log('TTS: Using Web Speech API for letter:', text);
-    } else {
-      console.log('TTS: Using Web Speech API for word:', text);
-    }
 
     return new Promise((resolve, reject) => {
       // Wait for any ongoing speech to finish

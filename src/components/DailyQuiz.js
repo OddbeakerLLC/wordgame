@@ -47,8 +47,6 @@ export async function renderDailyQuiz(container, child, onComplete) {
   // Pull the first N words from the queue for this quiz session
   const quizQueue = drilledWords.slice(0, child.quizLength);
 
-  console.log(`Starting quiz with ${quizQueue.length} words: ${quizQueue.map(w => w.text).join(', ')}`);
-
   const state = {
     quizQueue: quizQueue, // Words for this quiz session
     quizLength: child.quizLength,
@@ -67,7 +65,6 @@ async function render(container, child, state, onComplete) {
 
   // Shift next word from front of queue
   const currentWord = state.quizQueue.shift();
-  console.log(`Presenting word: "${currentWord.text}", Queue remaining: ${state.quizQueue.length}`);
   const progress = state.completedCount;
   const total = state.quizLength;
 
@@ -332,7 +329,6 @@ async function handleLetterInput(
   } else {
     // Wrong letter - show correction and restart
     practiceState.errorCount++;
-    console.log(`Error count incremented to: ${practiceState.errorCount}`);
     await handleError(
       letter,
       expectedLetter,
@@ -404,7 +400,6 @@ async function completeQuizWord(
   onComplete
 ) {
   const hadErrors = practiceState.errorCount > 0;
-  console.log(`Completing word "${word.text}" with errorCount: ${practiceState.errorCount}, hadErrors: ${hadErrors}`);
 
   // Record the attempt in the database
   await recordAttempt(word.id, !hadErrors);
@@ -412,11 +407,9 @@ async function completeQuizWord(
   // Update queue position based on performance
   if (hadErrors) {
     // Move to position 2 (gets another try soon)
-    console.log(`Moving word "${word.text}" to position 2 due to errors`);
     await moveWordToSecond(word.id);
   } else {
     // Move to back of queue (mastered!)
-    console.log(`Moving word "${word.text}" to back of queue (mastered)`);
     await moveWordToBack(word.id);
   }
 
@@ -450,14 +443,10 @@ async function completeQuizWord(
     if (nextWord) {
       state.quizQueue.unshift(nextWord);
     }
-    console.log(`Word "${word.text}" failed - put back immediately`);
   } else {
     // Word mastered - already shifted, don't add back
     state.completedCount++;
-    console.log(`Word "${word.text}" mastered`);
   }
-
-  console.log(`Queue: [${state.quizQueue.map(w => w.text).join(', ')}], Completed: ${state.completedCount}/${state.quizLength}`);
 
   // Re-render (will either show next word or completion screen)
   render(container, child, state, onComplete);

@@ -36,8 +36,6 @@ class HeadTTSService {
     this.initializing = true;
 
     try {
-      console.log("HeadTTS: Initializing neural TTS...");
-
       // Create audio context if needed
       if (!this.audioContext) {
         this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -75,7 +73,6 @@ class HeadTTSService {
       });
 
       // Connect to the inference backend
-      console.log("HeadTTS: Connecting to inference backend...");
       await this.headtts.connect();
 
       // Setup voice configuration
@@ -88,7 +85,7 @@ class HeadTTSService {
 
       this.initialized = true;
       this.initializing = false;
-      console.log("HeadTTS: Successfully initialized with voice:", this.currentVoice);
+      console.log("HeadTTS ready");
       return true;
     } catch (error) {
       console.error("HeadTTS: Initialization failed:", error);
@@ -118,19 +115,15 @@ class HeadTTSService {
 
         // Handle messages from HeadTTS
         const messageHandler = (message) => {
-          console.log('HeadTTS: Received message:', message.type);
-
           if (message.type === "audio") {
             // HeadTTS returns audio in message.data.audio
             const audioData = message.data?.audio;
 
             if (!audioData) {
-              console.error('HeadTTS: No audio data in message.data');
+              console.error('HeadTTS: No audio data received');
               reject(new Error("No audio data received"));
               return;
             }
-
-            console.log('HeadTTS: Audio data type:', typeof audioData, audioData?.constructor?.name);
 
             // Play the audio
             this.playAudio(audioData)
@@ -166,11 +159,8 @@ class HeadTTSService {
   async playAudio(audioData) {
     return new Promise(async (resolve, reject) => {
       try {
-        console.log('HeadTTS: Audio data type:', typeof audioData, audioData?.constructor?.name);
-
         // Check if it's already an AudioBuffer (HeadTTS returns this)
         if (audioData instanceof AudioBuffer) {
-          console.log('HeadTTS: Playing AudioBuffer directly');
           // Create and play the audio source
           const source = this.audioContext.createBufferSource();
           source.buffer = audioData;
@@ -188,17 +178,14 @@ class HeadTTSService {
         let arrayBuffer;
 
         if (audioData instanceof Blob) {
-          console.log('HeadTTS: Converting Blob to ArrayBuffer');
           arrayBuffer = await audioData.arrayBuffer();
         } else if (audioData instanceof ArrayBuffer) {
-          console.log('HeadTTS: Already ArrayBuffer');
           arrayBuffer = audioData;
         } else if (audioData?.buffer instanceof ArrayBuffer) {
-          console.log('HeadTTS: Converting TypedArray to ArrayBuffer');
           arrayBuffer = audioData.buffer;
         } else {
-          console.error('HeadTTS: Unsupported audio data format:', audioData);
-          reject(new Error("Unsupported audio data format: " + typeof audioData));
+          console.error('HeadTTS: Unsupported audio format');
+          reject(new Error("Unsupported audio data format"));
           return;
         }
 

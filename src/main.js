@@ -11,14 +11,11 @@ async function init() {
 
     // Start loading TTS (including HeadTTS) in background immediately
     // Don't await - let it load while user navigates
-    console.log('Starting TTS initialization in background...');
     tts.init().catch(err => console.error('TTS initialization error:', err));
 
     // Render the main app
     const app = document.getElementById('app');
     renderApp(app);
-
-    console.log('Word Quest initialized successfully!');
   } catch (error) {
     console.error('Failed to initialize Word Quest:', error);
     const app = document.getElementById('app');

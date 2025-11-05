@@ -1,12 +1,18 @@
 import './styles/main.css';
 import { initDB } from './services/storage.js';
 import { renderApp } from './components/App.js';
+import tts from './services/tts.js';
 
 // Initialize the application
 async function init() {
   try {
     // Initialize IndexedDB
     await initDB();
+
+    // Start loading TTS (including HeadTTS) in background immediately
+    // Don't await - let it load while user navigates
+    console.log('Starting TTS initialization in background...');
+    tts.init().catch(err => console.error('TTS initialization error:', err));
 
     // Render the main app
     const app = document.getElementById('app');

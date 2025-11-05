@@ -11,6 +11,7 @@ class TTSService {
     this.synth = window.speechSynthesis;
     this.voice = null;
     this.initialized = false;
+    this.initializing = false; // Prevent duplicate initialization
     this.currentUtterance = null; // Keep reference to prevent garbage collection
 
     // HeadTTS (neural, better quality)
@@ -23,6 +24,20 @@ class TTSService {
    */
   async init() {
     if (this.initialized) return;
+
+    // Wait if already initializing
+    if (this.initializing) {
+      return new Promise((resolve) => {
+        const checkInit = setInterval(() => {
+          if (this.initialized || !this.initializing) {
+            clearInterval(checkInit);
+            resolve();
+          }
+        }, 100);
+      });
+    }
+
+    this.initializing = true;
 
     // Initialize Web Speech API (fast, always works)
     await new Promise((resolve) => {
@@ -44,6 +59,7 @@ class TTSService {
         console.log('Web Speech API initialized with voice:', this.voice?.name, '(local:', this.voice?.localService + ')');
 
         this.initialized = true;
+        this.initializing = false;
         resolve();
       };
 

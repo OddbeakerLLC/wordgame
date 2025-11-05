@@ -118,16 +118,19 @@ class HeadTTSService {
 
         // Handle messages from HeadTTS
         const messageHandler = (message) => {
-          console.log('HeadTTS: Received message:', message.type, Object.keys(message));
+          console.log('HeadTTS: Received message:', message.type);
 
           if (message.type === "audio") {
-            // Log the full structure to see where audio is
-            console.log('HeadTTS: message.data structure:', message.data);
-            console.log('HeadTTS: message.data keys:', Object.keys(message.data || {}));
+            // HeadTTS returns audio in message.data.audio
+            const audioData = message.data?.audio;
 
-            // HeadTTS wraps audio in message.data object - look for audio/buffer property
-            const audioData = message.data?.audio || message.data?.buffer || message.data?.audioBuffer || message.data;
-            console.log('HeadTTS: Extracted audio data type:', typeof audioData, audioData?.constructor?.name);
+            if (!audioData) {
+              console.error('HeadTTS: No audio data in message.data');
+              reject(new Error("No audio data received"));
+              return;
+            }
+
+            console.log('HeadTTS: Audio data type:', typeof audioData, audioData?.constructor?.name);
 
             // Play the audio
             this.playAudio(audioData)

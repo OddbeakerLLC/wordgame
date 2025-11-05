@@ -147,15 +147,31 @@ class HeadTTSService {
 
   /**
    * Play audio buffer
-   * @param {ArrayBuffer} audioData - WAV audio data
+   * @param {Blob|ArrayBuffer|Uint8Array} audioData - WAV audio data
    * @returns {Promise} - Resolves when audio finishes playing
    */
   async playAudio(audioData) {
-    return new Promise((resolve, reject) => {
+    return new Promise(async (resolve, reject) => {
       try {
+        // Convert to ArrayBuffer if needed
+        let arrayBuffer;
+
+        if (audioData instanceof Blob) {
+          // Convert Blob to ArrayBuffer
+          arrayBuffer = await audioData.arrayBuffer();
+        } else if (audioData instanceof ArrayBuffer) {
+          arrayBuffer = audioData;
+        } else if (audioData.buffer instanceof ArrayBuffer) {
+          // Typed array (Uint8Array, etc.)
+          arrayBuffer = audioData.buffer;
+        } else {
+          reject(new Error("Unsupported audio data format"));
+          return;
+        }
+
         // Decode the audio data
         this.audioContext.decodeAudioData(
-          audioData,
+          arrayBuffer,
           (audioBuffer) => {
             // Create and play the audio source
             const source = this.audioContext.createBufferSource();

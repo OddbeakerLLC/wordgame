@@ -49,8 +49,9 @@ class HeadTTSService {
         : new URL('../../../node_modules/@met4citizen/headtts/modules/worker-tts.mjs', import.meta.url).href;
 
       // Set dictionary path to the node_modules location
+      // Must be a full absolute URL for Web Worker context
       const dictionaryPath = import.meta.env.DEV
-        ? '/node_modules/@met4citizen/headtts/dictionaries/'
+        ? `${window.location.origin}/node_modules/@met4citizen/headtts/dictionaries/`
         : new URL('../../../node_modules/@met4citizen/headtts/dictionaries/', import.meta.url).href;
 
       console.log('HeadTTS: Worker module path:', workerModulePath);

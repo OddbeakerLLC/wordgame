@@ -164,9 +164,8 @@ async function renderQuizWord(
     </div>
   `;
 
-  // Speak the word
-  await tts.speak("Spell:");
-  await tts.speakWord(word.text);
+  // Speak the word as a single phrase (avoids generation delay between parts)
+  await tts.speakWord(`Spell: ${word.text}`);
 
   // Set up practice state
   const practiceState = {

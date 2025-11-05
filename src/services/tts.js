@@ -7,6 +7,7 @@ class TTSService {
     this.synth = window.speechSynthesis;
     this.voice = null;
     this.initialized = false;
+    this.currentUtterance = null; // Keep reference to prevent garbage collection
   }
 
   /**
@@ -20,12 +21,19 @@ class TTSService {
       const loadVoices = () => {
         const voices = this.synth.getVoices();
 
+        // IMPORTANT: Prefer LOCAL voices (localService=true) - they're more reliable
+        // Remote voices can cut off after 15 seconds in Chrome
+        const localVoices = voices.filter(v => v.localService);
+        const voicePool = localVoices.length > 0 ? localVoices : voices;
+
         // Prefer child-friendly voices (higher pitch, clear)
         // Try to find US English voices first
-        this.voice = voices.find(v => v.lang === 'en-US' && v.name.includes('Female'))
-          || voices.find(v => v.lang === 'en-US')
-          || voices.find(v => v.lang.startsWith('en'))
-          || voices[0];
+        this.voice = voicePool.find(v => v.lang === 'en-US' && v.name.includes('Female'))
+          || voicePool.find(v => v.lang === 'en-US')
+          || voicePool.find(v => v.lang.startsWith('en'))
+          || voicePool[0];
+
+        console.log('TTS initialized with voice:', this.voice?.name, '(local:', this.voice?.localService + ')');
 
         this.initialized = true;
         resolve();
@@ -55,10 +63,13 @@ class TTSService {
       // Wait for any ongoing speech to finish
       if (this.synth.speaking) {
         this.synth.cancel();
-        // Small delay to ensure cancellation completes
+
+        // Resume after cancel to reset speech engine (Chrome bug workaround)
+        // Must wait longer for cancel to complete - 50ms is too short
         setTimeout(() => {
+          this.synth.resume();
           this._speakUtterance(text, options, resolve, reject);
-        }, 50);
+        }, 250); // Increased from 50ms to 250ms (browser needs time to reset)
       } else {
         this._speakUtterance(text, options, resolve, reject);
       }
@@ -77,12 +88,21 @@ class TTSService {
     utterance.pitch = options.pitch || 1.1; // Slightly higher for kids
     utterance.volume = options.volume || 1;
 
+    // Store reference to prevent garbage collection (browser bug workaround)
+    this.currentUtterance = utterance;
+
     utterance.onend = () => {
-      resolve();
+      // Add small delay before resolving to ensure audio fully completes
+      // Some browsers fire 'onend' slightly before audio finishes
+      setTimeout(() => {
+        this.currentUtterance = null;
+        resolve();
+      }, 100);
     };
 
     utterance.onerror = (error) => {
       console.error('TTS error:', error);
+      this.currentUtterance = null;
       resolve(); // Resolve anyway to prevent hanging
     };
 

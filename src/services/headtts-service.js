@@ -160,7 +160,7 @@ class HeadTTSService {
 
   /**
    * Play audio buffer
-   * @param {Blob|ArrayBuffer|Uint8Array} audioData - WAV audio data
+   * @param {AudioBuffer|Blob|ArrayBuffer|Uint8Array} audioData - Audio data
    * @returns {Promise} - Resolves when audio finishes playing
    */
   async playAudio(audioData) {
@@ -168,28 +168,34 @@ class HeadTTSService {
       try {
         console.log('HeadTTS: Audio data type:', typeof audioData, audioData?.constructor?.name);
 
-        // Convert to ArrayBuffer if needed
+        // Check if it's already an AudioBuffer (HeadTTS returns this)
+        if (audioData instanceof AudioBuffer) {
+          console.log('HeadTTS: Playing AudioBuffer directly');
+          // Create and play the audio source
+          const source = this.audioContext.createBufferSource();
+          source.buffer = audioData;
+          source.connect(this.audioContext.destination);
+
+          source.onended = () => {
+            resolve();
+          };
+
+          source.start(0);
+          return;
+        }
+
+        // Otherwise, decode the audio data first
         let arrayBuffer;
 
         if (audioData instanceof Blob) {
-          // Convert Blob to ArrayBuffer
           console.log('HeadTTS: Converting Blob to ArrayBuffer');
           arrayBuffer = await audioData.arrayBuffer();
         } else if (audioData instanceof ArrayBuffer) {
           console.log('HeadTTS: Already ArrayBuffer');
           arrayBuffer = audioData;
         } else if (audioData?.buffer instanceof ArrayBuffer) {
-          // Typed array (Uint8Array, etc.)
           console.log('HeadTTS: Converting TypedArray to ArrayBuffer');
           arrayBuffer = audioData.buffer;
-        } else if (audioData?.data instanceof ArrayBuffer) {
-          // HeadTTS might wrap it in an object with a data property
-          console.log('HeadTTS: Extracting ArrayBuffer from data property');
-          arrayBuffer = audioData.data;
-        } else if (audioData?.data?.buffer instanceof ArrayBuffer) {
-          // HeadTTS might wrap TypedArray in data property
-          console.log('HeadTTS: Extracting ArrayBuffer from data.buffer');
-          arrayBuffer = audioData.data.buffer;
         } else {
           console.error('HeadTTS: Unsupported audio data format:', audioData);
           reject(new Error("Unsupported audio data format: " + typeof audioData));

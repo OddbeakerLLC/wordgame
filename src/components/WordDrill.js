@@ -40,20 +40,27 @@ async function render(container, child, state, onComplete) {
   const total = state.words.length;
 
   container.innerHTML = `
-    <div class="min-h-screen flex items-center justify-center p-4">
-      <div class="card max-w-3xl w-full">
-        <div class="mb-6">
-          <div class="flex items-center justify-between mb-2">
-            <h2 class="text-2xl font-bold text-primary-600">Learning New Words</h2>
-            <span class="text-lg text-gray-600">${progress} / ${total}</span>
+    <div class="min-h-screen flex items-center justify-center p-2 sm:p-4">
+      <div class="card max-w-3xl w-full p-4 sm:p-6">
+        <div class="mb-4 sm:mb-6">
+          <div class="flex items-center justify-between gap-2 mb-2">
+            <h2 class="text-lg sm:text-2xl font-bold text-primary-600 truncate flex-shrink">
+              Learning New Words
+            </h2>
+            <div class="flex items-center gap-2 sm:gap-4 flex-shrink-0">
+              <span class="text-sm sm:text-lg text-gray-600 whitespace-nowrap">${progress}/${total}</span>
+              <button id="exit-drill-btn" class="btn-secondary text-xs sm:text-sm px-2 py-1 sm:px-4 sm:py-2">
+                Exit
+              </button>
+            </div>
           </div>
-          <div class="w-full bg-gray-200 rounded-full h-3">
-            <div class="bg-primary-600 h-3 rounded-full transition-all duration-300"
+          <div class="w-full bg-gray-200 rounded-full h-2 sm:h-3">
+            <div class="bg-primary-600 h-2 sm:h-3 rounded-full transition-all duration-300"
                  style="width: ${(progress / total) * 100}%"></div>
           </div>
         </div>
 
-        <div id="drill-content" class="text-center py-12">
+        <div id="drill-content" class="text-center py-6 sm:py-12">
           <!-- Content will be rendered based on phase -->
         </div>
       </div>
@@ -61,6 +68,17 @@ async function render(container, child, state, onComplete) {
   `;
 
   const content = container.querySelector("#drill-content");
+
+  // Add exit button handler
+  const exitBtn = container.querySelector("#exit-drill-btn");
+  exitBtn.addEventListener("click", () => {
+    audio.playClick();
+    // Clean up any keyboard listeners
+    if (state.practiceState?.keyHandler) {
+      document.removeEventListener("keydown", state.practiceState.keyHandler);
+    }
+    onComplete();
+  });
 
   switch (state.phase) {
     case "intro":
@@ -86,10 +104,10 @@ async function render(container, child, state, onComplete) {
  */
 function renderIntro(content, word, state, container, child, onComplete) {
   content.innerHTML = `
-    <div class="space-y-6">
-      <h3 class="text-3xl font-bold text-gray-800">Let's learn a new word!</h3>
-      <p class="text-xl text-gray-600">Get ready...</p>
-      <div class="animate-bounce text-6xl">📖</div>
+    <div class="space-y-4 sm:space-y-6">
+      <h3 class="text-2xl sm:text-3xl font-bold text-gray-800">Let's learn a new word!</h3>
+      <p class="text-lg sm:text-xl text-gray-600">Get ready...</p>
+      <div class="animate-bounce text-5xl sm:text-6xl">📖</div>
     </div>
   `;
 
@@ -112,12 +130,12 @@ async function renderShowing(
   onComplete
 ) {
   content.innerHTML = `
-    <div class="space-y-8">
-      <p class="text-2xl text-gray-600">Here's your new word:</p>
-      <div class="text-7xl font-bold text-primary-600 animate-bounce-in">
+    <div class="space-y-6 sm:space-y-8">
+      <p class="text-xl sm:text-2xl text-gray-600">Here's your new word:</p>
+      <div class="text-5xl sm:text-7xl font-bold text-primary-600 animate-bounce-in">
         ${escapeHtml(word.text)}
       </div>
-      <p class="text-xl text-gray-500">Listen carefully...</p>
+      <p class="text-lg sm:text-xl text-gray-500">Listen carefully...</p>
     </div>
   `;
 
@@ -143,12 +161,12 @@ async function renderSpelling(
   onComplete
 ) {
   content.innerHTML = `
-    <div class="space-y-8">
-      <p class="text-2xl text-gray-600">Let's spell it together:</p>
-      <div class="text-6xl font-bold text-primary-600">
+    <div class="space-y-6 sm:space-y-8">
+      <p class="text-xl sm:text-2xl text-gray-600">Let's spell it together:</p>
+      <div class="text-4xl sm:text-6xl font-bold text-primary-600">
         ${escapeHtml(word.text)}
       </div>
-      <div id="letter-display" class="flex justify-center gap-2 flex-wrap">
+      <div id="letter-display" class="flex justify-center gap-1.5 sm:gap-2 flex-wrap">
         ${word.text
           .split("")
           .map(
@@ -195,10 +213,10 @@ async function renderPractice(
   onComplete
 ) {
   content.innerHTML = `
-    <div class="space-y-8">
-      <p class="text-3xl text-gray-600">Now you try!</p>
+    <div class="space-y-6 sm:space-y-8">
+      <p class="text-2xl sm:text-3xl text-gray-600">Now you try!</p>
 
-      <div id="input-area" class="flex justify-center gap-2 flex-wrap">
+      <div id="input-area" class="flex justify-center gap-1.5 sm:gap-2 flex-wrap">
         ${word.text
           .split("")
           .map(
@@ -209,7 +227,7 @@ async function renderPractice(
           .join("")}
       </div>
 
-      <p class="text-lg text-gray-500">
+      <p class="text-base sm:text-lg text-gray-500">
         ${
           child.inputMethod === "keyboard"
             ? "Type the letters"
@@ -220,7 +238,7 @@ async function renderPractice(
       ${
         child.inputMethod !== "keyboard"
           ? `
-        <div id="letter-buttons" class="flex justify-center gap-2 flex-wrap max-w-2xl mx-auto">
+        <div id="letter-buttons" class="flex justify-center gap-1.5 sm:gap-2 flex-wrap max-w-2xl mx-auto px-2">
           <!-- Letter buttons will be added here -->
         </div>
       `
@@ -238,6 +256,9 @@ async function renderPractice(
     input: "",
     targetWord: word.text.toLowerCase(),
   };
+
+  // Store in state for cleanup on exit
+  state.practiceState = practiceState;
 
   attachPracticeListeners(
     content,
@@ -273,8 +294,8 @@ function attachPracticeListeners(
     letterButtons.innerHTML = letters
       .map(
         (letter) => `
-      <button class="letter-btn w-14 h-14 text-2xl font-bold bg-white border-2 border-primary-400
-                     rounded-lg hover:bg-primary-100 hover:scale-110 transition-all"
+      <button class="letter-btn w-12 h-12 sm:w-14 sm:h-14 text-xl sm:text-2xl font-bold bg-white border-2 border-primary-400
+                     rounded-lg hover:bg-primary-100 active:scale-95 sm:hover:scale-110 transition-all"
               data-letter="${letter}">
         ${letter.toUpperCase()}
       </button>
@@ -457,15 +478,15 @@ async function completeWord(word, state, container, child, onComplete) {
  */
 function renderComplete(content, state, onComplete) {
   content.innerHTML = `
-    <div class="space-y-8">
-      <div class="text-6xl animate-celebration">🎉</div>
-      <h3 class="text-4xl font-bold text-green-600">Amazing Work!</h3>
-      <p class="text-2xl text-gray-700">
+    <div class="space-y-6 sm:space-y-8">
+      <div class="text-5xl sm:text-6xl animate-celebration">🎉</div>
+      <h3 class="text-3xl sm:text-4xl font-bold text-green-600">Amazing Work!</h3>
+      <p class="text-xl sm:text-2xl text-gray-700">
         You learned ${state.words.length} new word${
     state.words.length === 1 ? "" : "s"
   }!
       </p>
-      <button id="done-btn" class="btn-primary text-xl px-8 py-4">
+      <button id="done-btn" class="btn-primary text-lg sm:text-xl px-6 py-3 sm:px-8 sm:py-4">
         Done
       </button>
     </div>

@@ -1,13 +1,21 @@
 /**
- * Text-to-Speech Service using Web Speech API
+ * Text-to-Speech Service
+ * Uses HeadTTS (neural) for better pronunciation, falls back to Web Speech API
  */
+
+import headttsService from "./headtts-service.js";
 
 class TTSService {
   constructor() {
+    // Web Speech API (fallback)
     this.synth = window.speechSynthesis;
     this.voice = null;
     this.initialized = false;
     this.currentUtterance = null; // Keep reference to prevent garbage collection
+
+    // HeadTTS (neural, better quality)
+    this.useNeural = true; // Try to use HeadTTS when available
+    this.neuralInitStarted = false;
   }
 
   /**
@@ -16,8 +24,8 @@ class TTSService {
   async init() {
     if (this.initialized) return;
 
-    return new Promise((resolve) => {
-      // Wait for voices to load
+    // Initialize Web Speech API (fast, always works)
+    await new Promise((resolve) => {
       const loadVoices = () => {
         const voices = this.synth.getVoices();
 
@@ -33,7 +41,7 @@ class TTSService {
           || voicePool.find(v => v.lang.startsWith('en'))
           || voicePool[0];
 
-        console.log('TTS initialized with voice:', this.voice?.name, '(local:', this.voice?.localService + ')');
+        console.log('Web Speech API initialized with voice:', this.voice?.name, '(local:', this.voice?.localService + ')');
 
         this.initialized = true;
         resolve();
@@ -45,6 +53,23 @@ class TTSService {
         this.synth.addEventListener('voiceschanged', loadVoices, { once: true });
       }
     });
+
+    // Start loading HeadTTS in the background (don't wait for it)
+    // This allows the app to start quickly while neural TTS loads
+    if (this.useNeural && !this.neuralInitStarted) {
+      this.neuralInitStarted = true;
+      console.log('TTS: Starting HeadTTS initialization in background...');
+
+      headttsService.init().then((success) => {
+        if (success) {
+          console.log('TTS: HeadTTS (neural) ready! Will use for better pronunciation.');
+        } else {
+          console.log('TTS: HeadTTS failed to load, using Web Speech API only.');
+        }
+      }).catch((error) => {
+        console.log('TTS: HeadTTS initialization error:', error);
+      });
+    }
   }
 
   /**
@@ -53,13 +78,26 @@ class TTSService {
    * @param {object} options - Speech options
    * @returns {Promise} - Resolves when speech is complete
    */
-  speak(text, options = {}) {
-    return new Promise((resolve, reject) => {
-      if (!this.initialized) {
-        this.init().then(() => this.speak(text, options).then(resolve).catch(reject));
-        return;
-      }
+  async speak(text, options = {}) {
+    if (!this.initialized) {
+      await this.init();
+    }
 
+    // Try HeadTTS (neural) first if available
+    if (this.useNeural && headttsService.isAvailable()) {
+      try {
+        // Convert rate to speed (Web Speech uses 0.1-10, HeadTTS uses 0.25-4)
+        const speed = options.rate ? Math.min(4, Math.max(0.25, options.rate)) : 1;
+        await headttsService.speak(text, { speed });
+        return;
+      } catch (error) {
+        console.warn('HeadTTS failed, falling back to Web Speech API:', error);
+        // Fall through to Web Speech API
+      }
+    }
+
+    // Fallback to Web Speech API
+    return new Promise((resolve, reject) => {
       // Wait for any ongoing speech to finish
       if (this.synth.speaking) {
         this.synth.cancel();
@@ -143,6 +181,10 @@ class TTSService {
    * Stop any ongoing speech
    */
   stop() {
+    // Stop both TTS systems
+    if (headttsService.isAvailable()) {
+      headttsService.stop();
+    }
     this.synth.cancel();
   }
 }

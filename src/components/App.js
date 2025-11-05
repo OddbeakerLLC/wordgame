@@ -3,6 +3,7 @@ import { renderChildSelection } from './ChildSelection.js';
 import { renderMainMenu } from './MainMenu.js';
 import { renderParentTeacher } from './ParentTeacher.js';
 import { renderWordDrill } from './WordDrill.js';
+import { renderDailyQuiz } from './DailyQuiz.js';
 
 /**
  * Application State
@@ -51,8 +52,7 @@ function render(container) {
       renderWordDrill(container, state.currentChild, () => switchView('main-menu'));
       break;
     case 'quiz':
-      // TODO: Render quiz view
-      container.innerHTML = '<div class="text-center p-8">Quiz mode coming soon...</div>';
+      renderDailyQuiz(container, state.currentChild, () => switchView('main-menu'));
       break;
     case 'parent':
       renderParentTeacher(container, () => switchView('main-menu'));

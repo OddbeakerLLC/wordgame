@@ -44,13 +44,17 @@ class HeadTTSService {
       }
 
       // Determine the worker module path based on environment
-      // In Vite dev mode, use node_modules path directly
-      // In production build, Vite will bundle it
       const workerModulePath = import.meta.env.DEV
         ? new URL('@met4citizen/headtts/modules/worker-tts.mjs', import.meta.url).href
         : new URL('../../../node_modules/@met4citizen/headtts/modules/worker-tts.mjs', import.meta.url).href;
 
+      // Set dictionary path to the node_modules location
+      const dictionaryPath = import.meta.env.DEV
+        ? '/node_modules/@met4citizen/headtts/dictionaries/'
+        : new URL('../../../node_modules/@met4citizen/headtts/dictionaries/', import.meta.url).href;
+
       console.log('HeadTTS: Worker module path:', workerModulePath);
+      console.log('HeadTTS: Dictionary path:', dictionaryPath);
 
       // Create HeadTTS instance
       this.headtts = new HeadTTS({
@@ -59,6 +63,7 @@ class HeadTTSService {
         voices: [this.currentVoice], // Preload the default voice
         audioCtx: this.audioContext,
         workerModule: workerModulePath, // Explicitly set worker path for Vite
+        dictionaryURL: dictionaryPath, // Explicitly set dictionary path
         dtypeWebgpu: "fp32", // Best quality for WebGPU
         dtypeWasm: "q8", // Smaller model for WASM (88MB)
         defaultVoice: this.currentVoice,

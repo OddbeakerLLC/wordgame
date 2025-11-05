@@ -1,0 +1,13 @@
+Icon Generation Required
+========================
+
+To complete the PWA setup, you need to generate PNG icons:
+
+Quick Method:
+1. Open tools/generate-icons.html in your browser
+2. Click "Download 192x192" and save to public/icon-192.png
+3. Click "Download 512x512" and save to public/icon-512.png
+
+The app will work without these, but won't be installable until the icons are added.
+
+See docs/PWA.md for more details and alternative methods.

@@ -44,18 +44,30 @@ export async function renderDailyQuiz(container, child, onComplete) {
     return;
   }
 
+  // Pull the first N words from the queue for this quiz session
+  const quizQueue = drilledWords.slice(0, child.quizLength);
+
+  console.log(`Starting quiz with ${quizQueue.length} words: ${quizQueue.map(w => w.text).join(', ')}`);
+
   const state = {
-    words: drilledWords,
+    quizQueue: quizQueue, // Words for this quiz session
     quizLength: child.quizLength,
     completedCount: 0,
-    currentWordIndex: 0,
   };
 
   render(container, child, state, onComplete);
 }
 
 async function render(container, child, state, onComplete) {
-  const currentWord = state.words[state.currentWordIndex];
+  // Check if quiz is complete first
+  if (state.completedCount >= state.quizLength) {
+    renderComplete(container, state, onComplete);
+    return;
+  }
+
+  // Shift next word from front of queue
+  const currentWord = state.quizQueue.shift();
+  console.log(`Presenting word: "${currentWord.text}", Queue remaining: ${state.quizQueue.length}`);
   const progress = state.completedCount;
   const total = state.quizLength;
 
@@ -100,12 +112,7 @@ async function render(container, child, state, onComplete) {
     onComplete();
   });
 
-  // Check if quiz is complete
-  if (state.completedCount >= state.quizLength) {
-    renderComplete(content, state, onComplete);
-  } else {
-    renderQuizWord(content, currentWord, child, state, container, onComplete);
-  }
+  renderQuizWord(content, currentWord, child, state, container, onComplete);
 }
 
 /**
@@ -319,6 +326,7 @@ async function handleLetterInput(
   } else {
     // Wrong letter - show correction and restart
     practiceState.errorCount++;
+    console.log(`Error count incremented to: ${practiceState.errorCount}`);
     await handleError(
       letter,
       expectedLetter,
@@ -390,6 +398,7 @@ async function completeQuizWord(
   onComplete
 ) {
   const hadErrors = practiceState.errorCount > 0;
+  console.log(`Completing word "${word.text}" with errorCount: ${practiceState.errorCount}, hadErrors: ${hadErrors}`);
 
   // Record the attempt in the database
   await recordAttempt(word.id, !hadErrors);
@@ -397,9 +406,11 @@ async function completeQuizWord(
   // Update queue position based on performance
   if (hadErrors) {
     // Move to position 2 (gets another try soon)
+    console.log(`Moving word "${word.text}" to position 2 due to errors`);
     await moveWordToSecond(word.id);
   } else {
     // Move to back of queue (mastered!)
+    console.log(`Moving word "${word.text}" to back of queue (mastered)`);
     await moveWordToBack(word.id);
   }
 
@@ -425,16 +436,22 @@ async function completeQuizWord(
   // Wait a moment
   await sleep(1500);
 
-  // Increment completed count
-  state.completedCount++;
-
-  // Move to next word
-  state.currentWordIndex++;
-
-  // If we've gone through all words, loop back to the beginning
-  if (state.currentWordIndex >= state.words.length) {
-    state.currentWordIndex = 0;
+  // Handle word based on performance
+  if (hadErrors) {
+    // Swap: shift next word, unshift failed word, then unshift next word
+    const nextWord = state.quizQueue.shift();
+    state.quizQueue.unshift(word);
+    if (nextWord) {
+      state.quizQueue.unshift(nextWord);
+    }
+    console.log(`Word "${word.text}" failed - put back immediately`);
+  } else {
+    // Word mastered - already shifted, don't add back
+    state.completedCount++;
+    console.log(`Word "${word.text}" mastered`);
   }
+
+  console.log(`Queue: [${state.quizQueue.map(w => w.text).join(', ')}], Completed: ${state.completedCount}/${state.quizLength}`);
 
   // Re-render (will either show next word or completion screen)
   render(container, child, state, onComplete);
@@ -443,25 +460,27 @@ async function completeQuizWord(
 /**
  * Complete phase: Quiz finished
  */
-function renderComplete(content, state, onComplete) {
-  content.innerHTML = `
-    <div class="space-y-6 sm:space-y-8">
-      <div class="text-5xl sm:text-6xl animate-celebration">🎉</div>
-      <h3 class="text-3xl sm:text-4xl font-bold text-green-600">Quiz Complete!</h3>
-      <p class="text-xl sm:text-2xl text-gray-700">
-        You spelled ${state.quizLength} word${
-    state.quizLength === 1 ? "" : "s"
-  }!
-      </p>
-      <button id="done-btn" class="btn-primary text-lg sm:text-xl px-6 py-3 sm:px-8 sm:py-4">
-        Done
-      </button>
+function renderComplete(container, state, onComplete) {
+  container.innerHTML = `
+    <div class="min-h-screen flex items-center justify-center p-2 sm:p-4">
+      <div class="card max-w-3xl w-full p-4 sm:p-6 text-center">
+        <div class="space-y-6 sm:space-y-8 py-6 sm:py-12">
+          <div class="text-5xl sm:text-6xl animate-celebration">🎉</div>
+          <h3 class="text-3xl sm:text-4xl font-bold text-green-600">Quiz Complete!</h3>
+          <p class="text-xl sm:text-2xl text-gray-700">
+            You spelled ${state.quizLength} word${state.quizLength === 1 ? "" : "s"}!
+          </p>
+          <button id="done-btn" class="btn-primary text-lg sm:text-xl px-6 py-3 sm:px-8 sm:py-4">
+            Done
+          </button>
+        </div>
+      </div>
     </div>
   `;
 
   audio.playApplause();
 
-  content.querySelector("#done-btn").addEventListener("click", () => {
+  container.querySelector("#done-btn").addEventListener("click", () => {
     audio.playClick();
     onComplete();
   });

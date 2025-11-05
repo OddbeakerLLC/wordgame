@@ -118,9 +118,15 @@ class HeadTTSService {
 
         // Handle messages from HeadTTS
         const messageHandler = (message) => {
+          console.log('HeadTTS: Received message:', message.type, Object.keys(message));
+
           if (message.type === "audio") {
+            // HeadTTS might use different property names for audio data
+            const audioData = message.audio || message.data || message.buffer || message.audioData;
+            console.log('HeadTTS: Audio data found in property:', audioData ? 'yes' : 'no');
+
             // Play the audio
-            this.playAudio(message.audio)
+            this.playAudio(audioData)
               .then(() => {
                 this.headtts.onmessage = null; // Clean up handler
                 resolve();

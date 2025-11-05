@@ -301,10 +301,12 @@ async function handleLetterInput(
     box.textContent = letter.toUpperCase();
     box.classList.add("filled", "correct");
 
-    // Speak the letter
+    // Play click sound and speak the letter (don't wait for speech to finish)
     audio.playClick();
     await sleep(300);
-    await tts.speakLetter(letter);
+
+    // Start speaking but don't await - allows immediate next input
+    tts.speakLetter(letter).catch(err => console.error('TTS error:', err));
 
     // Check if word is complete
     if (practiceState.input === practiceState.targetWord) {
@@ -321,6 +323,7 @@ async function handleLetterInput(
         onComplete
       );
     } else {
+      // Allow next input immediately
       practiceState.processing = false;
     }
   } else {

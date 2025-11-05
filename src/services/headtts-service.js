@@ -121,9 +121,13 @@ class HeadTTSService {
           console.log('HeadTTS: Received message:', message.type, Object.keys(message));
 
           if (message.type === "audio") {
-            // HeadTTS might use different property names for audio data
-            const audioData = message.audio || message.data || message.buffer || message.audioData;
-            console.log('HeadTTS: Audio data found in property:', audioData ? 'yes' : 'no');
+            // Log the full structure to see where audio is
+            console.log('HeadTTS: message.data structure:', message.data);
+            console.log('HeadTTS: message.data keys:', Object.keys(message.data || {}));
+
+            // HeadTTS wraps audio in message.data object - look for audio/buffer property
+            const audioData = message.data?.audio || message.data?.buffer || message.data?.audioBuffer || message.data;
+            console.log('HeadTTS: Extracted audio data type:', typeof audioData, audioData?.constructor?.name);
 
             // Play the audio
             this.playAudio(audioData)

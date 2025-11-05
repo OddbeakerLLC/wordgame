@@ -83,9 +83,14 @@ class TTSService {
       await this.init();
     }
 
-    // Try HeadTTS (neural) first if available
-    if (this.useNeural && headttsService.isAvailable()) {
+    // Strategy: Use Web Speech API for single letters (better pronunciation)
+    // Use HeadTTS for words (better natural speech)
+    const isSingleLetter = text.trim().length === 1;
+
+    // Try HeadTTS (neural) for words only if available
+    if (!isSingleLetter && this.useNeural && headttsService.isAvailable()) {
       try {
+        console.log('TTS: Using HeadTTS (neural) for word:', text);
         // Convert rate to speed (Web Speech uses 0.1-10, HeadTTS uses 0.25-4)
         const speed = options.rate ? Math.min(4, Math.max(0.25, options.rate)) : 1;
         await headttsService.speak(text, { speed });
@@ -96,7 +101,13 @@ class TTSService {
       }
     }
 
-    // Fallback to Web Speech API
+    // Use Web Speech API for letters or if HeadTTS unavailable
+    if (isSingleLetter) {
+      console.log('TTS: Using Web Speech API for letter:', text);
+    } else {
+      console.log('TTS: Using Web Speech API for word:', text);
+    }
+
     return new Promise((resolve, reject) => {
       // Wait for any ongoing speech to finish
       if (this.synth.speaking) {

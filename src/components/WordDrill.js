@@ -247,8 +247,8 @@ async function renderPractice(
     </div>
   `;
 
-  // Speak "Now you try! Spell: {word}" as a single phrase
-  await tts.speak(`Now you try! Spell: ${word.text}`);
+  // Wait a moment for UI to settle, then speak
+  await tts.speak(`Now you spell: ${word.text}`);
 
   // Set up practice state
   const practiceState = {
@@ -390,7 +390,7 @@ async function handleLetterInput(
       await completeWord(word, state, container, child, onComplete);
     } else {
       // For other letters: start speaking but don't wait - allows immediate next input
-      tts.speakLetter(letter).catch(err => console.error('TTS error:', err));
+      tts.speakLetter(letter).catch((err) => console.error("TTS error:", err));
       practiceState.processing = false;
     }
   } else {
@@ -501,6 +501,7 @@ function renderComplete(content, state, onComplete) {
 
   content.querySelector("#done-btn").addEventListener("click", () => {
     audio.playClick();
+    audio.stop('applause');
     onComplete();
   });
 }

@@ -494,7 +494,7 @@ function renderPerfectQuiz(container, state, onComplete) {
       <!-- Fireworks container (full screen) -->
       <div id="fireworks-container" class="absolute inset-0 pointer-events-none"></div>
 
-      <div class="card max-w-4xl w-full p-4 sm:p-8 text-center relative z-10">
+      <div class="bg-white/50 backdrop-blur-sm rounded-2xl shadow-xl p-4 sm:p-8 border-2 border-primary-200 max-w-4xl w-full text-center relative z-10">
         <div class="space-y-4 sm:space-y-6 py-4 sm:py-8">
           <!-- Animated trophy -->
           <div class="text-6xl sm:text-8xl animate-bounce">🏆</div>

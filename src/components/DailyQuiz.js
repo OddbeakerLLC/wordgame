@@ -528,8 +528,8 @@ function renderPerfectQuiz(container, state, onComplete) {
     </div>
   `;
 
-  // Play thundering applause
-  audio.playApplause();
+  // Play huge thundering applause for perfect score!
+  audio.playHugeApplause();
 
   // Initialize fireworks
   const fireworksContainer = container.querySelector("#fireworks-container");

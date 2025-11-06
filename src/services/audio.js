@@ -24,15 +24,11 @@ class AudioService {
    * Initialize all sound effects
    */
   init() {
-    // For now, we'll use simple tone generators
-    // In production, you'd load actual sound files
-
-    // TODO: Add actual sound files to public/sounds/
-    // this.load('buzz', '/sounds/buzz.mp3');
-    // this.load('applause', '/sounds/applause.mp3');
-    // this.load('fireworks', '/sounds/fireworks.mp3');
-    // this.load('click', '/sounds/click.mp3');
-    // this.load('success', '/sounds/success.mp3');
+    // Load actual sound files
+    this.load('applause', '/sounds/applause.mp3');
+    this.load('huge-applause', '/sounds/huge-applause.mp3');
+    // Note: awww.mp3 is available for future use
+    // this.load('awww', '/sounds/awww.mp3');
   }
 
   /**
@@ -113,6 +109,10 @@ class AudioService {
 
   playApplause() {
     this.play('applause');
+  }
+
+  playHugeApplause() {
+    this.play('huge-applause');
   }
 
   playFireworks() {

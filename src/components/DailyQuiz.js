@@ -560,6 +560,7 @@ function renderPerfectQuiz(container, state, onComplete) {
 
   container.querySelector("#done-btn").addEventListener("click", () => {
     audio.playClick();
+    audio.stop('huge-applause');
     fireworks.stop();
     onComplete();
   });
@@ -620,6 +621,7 @@ function renderRegularCompletion(container, state, onComplete) {
 
   container.querySelector("#done-btn").addEventListener("click", () => {
     audio.playClick();
+    audio.stop('applause');
     onComplete();
   });
 }

@@ -50,6 +50,25 @@ class AudioService {
   }
 
   /**
+   * Stop a sound effect
+   */
+  stop(name) {
+    const sound = this.sounds[name];
+    if (sound) {
+      sound.stop();
+    }
+  }
+
+  /**
+   * Stop all sounds
+   */
+  stopAll() {
+    Object.values(this.sounds).forEach(sound => {
+      sound.stop();
+    });
+  }
+
+  /**
    * Fallback beep generator using Web Audio API
    */
   playBeep(type) {

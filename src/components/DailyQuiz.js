@@ -6,6 +6,7 @@ import {
 } from "../services/storage.js";
 import tts from "../services/tts.js";
 import audio from "../services/audio.js";
+import { Fireworks } from 'fireworks-js';
 
 /**
  * Helper function for delays
@@ -489,16 +490,12 @@ function renderPerfectQuiz(container, state, onComplete) {
     .join('');
 
   container.innerHTML = `
-    <div class="min-h-screen flex items-center justify-center p-2 sm:p-4 bg-gradient-to-br from-yellow-50 to-orange-50">
-      <div class="card max-w-4xl w-full p-4 sm:p-8 text-center relative overflow-hidden">
-        <!-- Fireworks animation -->
-        <div class="fireworks-container absolute inset-0 pointer-events-none">
-          <div class="firework"></div>
-          <div class="firework"></div>
-          <div class="firework"></div>
-        </div>
+    <div class="min-h-screen flex items-center justify-center p-2 sm:p-4 bg-gradient-to-br from-yellow-50 to-orange-50 relative">
+      <!-- Fireworks container (full screen) -->
+      <div id="fireworks-container" class="absolute inset-0 pointer-events-none"></div>
 
-        <div class="space-y-4 sm:space-y-6 py-4 sm:py-8 relative z-10">
+      <div class="card max-w-4xl w-full p-4 sm:p-8 text-center relative z-10">
+        <div class="space-y-4 sm:space-y-6 py-4 sm:py-8">
           <!-- Animated trophy -->
           <div class="text-6xl sm:text-8xl animate-bounce">🏆</div>
 
@@ -534,8 +531,36 @@ function renderPerfectQuiz(container, state, onComplete) {
   // Play thundering applause
   audio.playApplause();
 
+  // Initialize fireworks
+  const fireworksContainer = container.querySelector("#fireworks-container");
+  const fireworks = new Fireworks(fireworksContainer, {
+    acceleration: 1.05,
+    friction: 0.97,
+    gravity: 1.5,
+    particles: 80,
+    explosion: 6,
+    traceLength: 3,
+    traceSpeed: 10,
+    flickering: 50,
+    intensity: 30,
+    rocketsPoint: {
+      min: 50,
+      max: 50
+    },
+    opacity: 0.5,
+    boundaries: {
+      x: 50,
+      y: 50,
+      width: fireworksContainer.clientWidth,
+      height: fireworksContainer.clientHeight
+    }
+  });
+
+  fireworks.start();
+
   container.querySelector("#done-btn").addEventListener("click", () => {
     audio.playClick();
+    fireworks.stop();
     onComplete();
   });
 }

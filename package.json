@@ -28,6 +28,7 @@
   "dependencies": {
     "@met4citizen/headtts": "^1.1.1",
     "dexie": "^4.0.11",
+    "fireworks-js": "^2.10.8",
     "howler": "^2.2.4",
     "three": "^0.171.0"
   }

@@ -51,6 +51,9 @@ export async function renderDailyQuiz(container, child, onComplete) {
     quizQueue: quizQueue, // Words for this quiz session
     quizLength: child.quizLength,
     completedCount: 0,
+    completedWords: [], // Track completed words {word: string, firstTry: boolean}
+    totalErrors: 0, // Track total errors across entire quiz
+    attemptedWords: new Set(), // Track which words have been attempted (for retry detection)
   };
 
   render(container, child, state, onComplete);
@@ -398,6 +401,10 @@ async function completeQuizWord(
   onComplete
 ) {
   const hadErrors = practiceState.errorCount > 0;
+  const isRetry = state.attemptedWords.has(word.text);
+
+  // Mark this word as attempted
+  state.attemptedWords.add(word.text);
 
   // Record the attempt in the database
   await recordAttempt(word.id, !hadErrors);
@@ -444,6 +451,16 @@ async function completeQuizWord(
   } else {
     // Word mastered - already shifted, don't add back
     state.completedCount++;
+    // Track this completed word
+    state.completedWords.push({
+      word: word.text,
+      firstTry: !isRetry && !hadErrors // Perfect on first attempt
+    });
+  }
+
+  // Track total errors for perfect quiz detection
+  if (practiceState.errorCount > 0) {
+    state.totalErrors = (state.totalErrors || 0) + practiceState.errorCount;
   }
 
   // Re-render (will either show next word or completion screen)
@@ -454,15 +471,118 @@ async function completeQuizWord(
  * Complete phase: Quiz finished
  */
 function renderComplete(container, state, onComplete) {
+  const isPerfect = state.totalErrors === 0;
+
+  if (isPerfect) {
+    renderPerfectQuiz(container, state, onComplete);
+  } else {
+    renderRegularCompletion(container, state, onComplete);
+  }
+}
+
+/**
+ * Perfect quiz celebration - no errors!
+ */
+function renderPerfectQuiz(container, state, onComplete) {
+  const wordList = state.completedWords
+    .map(w => `<span class="inline-block px-3 py-2 bg-yellow-100 text-yellow-900 rounded-lg font-bold text-lg sm:text-xl m-1">${escapeHtml(w.word.toUpperCase())}</span>`)
+    .join('');
+
+  container.innerHTML = `
+    <div class="min-h-screen flex items-center justify-center p-2 sm:p-4 bg-gradient-to-br from-yellow-50 to-orange-50">
+      <div class="card max-w-4xl w-full p-4 sm:p-8 text-center relative overflow-hidden">
+        <!-- Fireworks animation -->
+        <div class="fireworks-container absolute inset-0 pointer-events-none">
+          <div class="firework"></div>
+          <div class="firework"></div>
+          <div class="firework"></div>
+        </div>
+
+        <div class="space-y-4 sm:space-y-6 py-4 sm:py-8 relative z-10">
+          <!-- Animated trophy -->
+          <div class="text-6xl sm:text-8xl animate-bounce">🏆</div>
+
+          <h2 class="text-4xl sm:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500">
+            PERFECT SCORE!
+          </h2>
+
+          <p class="text-2xl sm:text-3xl font-bold text-green-600">
+            ${state.quizLength} word${state.quizLength === 1 ? "" : "s"} with ZERO mistakes!
+          </p>
+
+          <div class="my-6 sm:my-8">
+            <p class="text-lg sm:text-xl text-gray-700 font-semibold mb-4">
+              🌟 You mastered these words: 🌟
+            </p>
+            <div class="flex flex-wrap justify-center max-w-3xl mx-auto">
+              ${wordList}
+            </div>
+          </div>
+
+          <p class="text-base sm:text-lg text-gray-600 italic">
+            Show this to your parent or teacher!
+          </p>
+
+          <button id="done-btn" class="btn-primary text-xl sm:text-2xl px-8 py-4 sm:px-12 sm:py-6 shadow-xl hover:scale-110 transition-transform">
+            Amazing! 🎉
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Play thundering applause
+  audio.playApplause();
+
+  container.querySelector("#done-btn").addEventListener("click", () => {
+    audio.playClick();
+    onComplete();
+  });
+}
+
+/**
+ * Regular quiz completion - with some errors
+ */
+function renderRegularCompletion(container, state, onComplete) {
+  const perfectWords = state.completedWords.filter(w => w.firstTry).length;
+  const wordList = state.completedWords
+    .map(w => `<span class="inline-block px-3 py-2 ${w.firstTry ? 'bg-green-100 text-green-900' : 'bg-blue-100 text-blue-900'} rounded-lg font-semibold text-base sm:text-lg m-1">${escapeHtml(w.word)}</span>`)
+    .join('');
+
   container.innerHTML = `
     <div class="min-h-screen flex items-center justify-center p-2 sm:p-4">
-      <div class="card max-w-3xl w-full p-4 sm:p-6 text-center">
-        <div class="space-y-6 sm:space-y-8 py-6 sm:py-12">
+      <div class="card max-w-4xl w-full p-4 sm:p-6 text-center">
+        <div class="space-y-4 sm:space-y-6 py-6 sm:py-12">
           <div class="text-5xl sm:text-6xl animate-celebration">🎉</div>
-          <h3 class="text-3xl sm:text-4xl font-bold text-green-600">Quiz Complete!</h3>
-          <p class="text-xl sm:text-2xl text-gray-700">
-            You spelled ${state.quizLength} word${state.quizLength === 1 ? "" : "s"}!
-          </p>
+
+          <h3 class="text-3xl sm:text-4xl font-bold text-green-600">
+            Great Job!
+          </h3>
+
+          <div class="space-y-2">
+            <p class="text-xl sm:text-2xl text-gray-700">
+              You spelled ${state.quizLength} word${state.quizLength === 1 ? "" : "s"}!
+            </p>
+            ${perfectWords > 0 ? `
+              <p class="text-lg sm:text-xl text-green-600 font-semibold">
+                ${perfectWords} perfect on first try! ⭐
+              </p>
+            ` : ''}
+          </div>
+
+          <div class="my-4 sm:my-6">
+            <p class="text-base sm:text-lg text-gray-600 mb-3">
+              Words you practiced:
+            </p>
+            <div class="flex flex-wrap justify-center max-w-3xl mx-auto">
+              ${wordList}
+            </div>
+            <p class="text-sm sm:text-base text-gray-500 mt-3">
+              <span class="inline-block w-3 h-3 bg-green-100 rounded mr-1"></span> First try
+              <span class="inline-block w-3 h-3 bg-blue-100 rounded ml-3 mr-1"></span> Needed practice
+            </p>
+          </div>
+
           <button id="done-btn" class="btn-primary text-lg sm:text-xl px-6 py-3 sm:px-8 sm:py-4">
             Done
           </button>

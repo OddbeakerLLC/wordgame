@@ -67,6 +67,37 @@
   .animate-celebration {
     animation: celebration 1s;
   }
+
+  .fireworks-container {
+    @apply absolute inset-0 pointer-events-none overflow-hidden;
+  }
+
+  .firework {
+    @apply absolute w-2 h-2 rounded-full;
+    animation: firework 2s ease-out infinite;
+    box-shadow: 0 0 10px currentColor, 0 0 20px currentColor, 0 0 30px currentColor;
+  }
+
+  .firework:nth-child(1) {
+    left: 20%;
+    top: 80%;
+    color: #ef4444; /* red */
+    animation-delay: 0s;
+  }
+
+  .firework:nth-child(2) {
+    left: 50%;
+    top: 80%;
+    color: #eab308; /* yellow */
+    animation-delay: 0.7s;
+  }
+
+  .firework:nth-child(3) {
+    left: 80%;
+    top: 80%;
+    color: #3b82f6; /* blue */
+    animation-delay: 1.4s;
+  }
 }
 
 @keyframes shake {
@@ -85,4 +116,27 @@
   0%, 100% { transform: rotate(0deg) scale(1); }
   25% { transform: rotate(-10deg) scale(1.1); }
   75% { transform: rotate(10deg) scale(1.1); }
+}
+
+@keyframes firework {
+  0% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: translateY(-300px) scale(1);
+    opacity: 1;
+  }
+  50.1% {
+    transform: translateY(-300px) scale(1);
+    opacity: 1;
+  }
+  60% {
+    transform: translateY(-300px) scale(3);
+    opacity: 0.8;
+  }
+  100% {
+    transform: translateY(-300px) scale(5);
+    opacity: 0;
+  }
 }

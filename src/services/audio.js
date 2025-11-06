@@ -24,11 +24,12 @@ class AudioService {
    * Initialize all sound effects
    */
   init() {
-    // Load actual sound files
-    this.load('applause', '/sounds/applause.mp3');
-    this.load('huge-applause', '/sounds/huge-applause.mp3');
+    // Load actual sound files using base URL for subdirectory deployment
+    const base = import.meta.env.BASE_URL;
+    this.load('applause', `${base}sounds/applause.mp3`);
+    this.load('huge-applause', `${base}sounds/huge-applause.mp3`);
     // Note: awww.mp3 is available for future use
-    // this.load('awww', '/sounds/awww.mp3');
+    // this.load('awww', `${base}sounds/awww.mp3`);
   }
 
   /**

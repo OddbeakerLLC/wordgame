@@ -2,20 +2,21 @@ import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
+  base: '/wordmaster/',
   plugins: [
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['sounds/**/*', 'icon.svg', 'icon-192.png', 'icon-512.png'],
       manifest: {
-        name: 'Word Quest - Spelling Game for Kids',
-        short_name: 'Word Quest',
-        description: 'An interactive spelling game that helps children learn sight words through fun drills and daily quizzes with spaced repetition',
+        name: 'Word Master Challenge - Spelling Game for Kids',
+        short_name: 'Word Master',
+        description: 'An interactive spelling game that helps children master sight words through fun drills and daily quizzes with spaced repetition',
         theme_color: '#8b5cf6',
         background_color: '#ffffff',
         display: 'standalone',
         orientation: 'any',
-        start_url: '/',
-        scope: '/',
+        start_url: '/wordmaster/',
+        scope: '/wordmaster/',
         categories: ['education', 'games', 'kids'],
         icons: [
           {

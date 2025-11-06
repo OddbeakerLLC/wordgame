@@ -17,13 +17,13 @@ async function init() {
     const app = document.getElementById('app');
     renderApp(app);
   } catch (error) {
-    console.error('Failed to initialize Word Quest:', error);
+    console.error('Failed to initialize Word Master Challenge:', error);
     const app = document.getElementById('app');
     app.innerHTML = `
       <div class="min-h-screen flex items-center justify-center p-4">
         <div class="card max-w-md">
           <h1 class="text-2xl font-bold text-red-600 mb-4">Oops! Something went wrong</h1>
-          <p class="text-gray-700 mb-4">We couldn't start Word Quest. Please refresh the page to try again.</p>
+          <p class="text-gray-700 mb-4">We couldn't start Word Master Challenge. Please refresh the page to try again.</p>
           <button onclick="location.reload()" class="btn-primary w-full">
             Refresh Page
           </button>

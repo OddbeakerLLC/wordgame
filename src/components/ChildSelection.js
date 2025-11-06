@@ -11,7 +11,7 @@ export async function renderChildSelection(container, onChildSelected) {
     <div class="min-h-screen flex items-center justify-center p-4">
       <div class="card max-w-2xl w-full">
         <h1 class="text-4xl md:text-5xl font-bold text-center text-primary-600 mb-8">
-          Word Quest
+          Word Master Challenge
         </h1>
 
         ${children.length > 0 ? `

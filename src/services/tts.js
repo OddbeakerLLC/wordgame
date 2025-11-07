@@ -15,8 +15,25 @@ class TTSService {
     this.currentUtterance = null; // Keep reference to prevent garbage collection
 
     // HeadTTS (neural, better quality)
-    this.useNeural = true; // Try to use HeadTTS when available
+    // Only use on desktop - mobile devices have excellent native TTS
+    this.useNeural = this.isDesktop();
     this.neuralInitStarted = false;
+  }
+
+  /**
+   * Detect if user is on desktop (not mobile/tablet)
+   * Mobile devices have excellent native TTS, so we only use HeadTTS on desktop
+   */
+  isDesktop() {
+    // Check for mobile user agents
+    const mobileRegex = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i;
+    const isMobile = mobileRegex.test(navigator.userAgent);
+
+    // Also check for touch screen (tablets might have desktop user agents)
+    const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+
+    // Desktop = not mobile AND no touch screen (or very large touch screen like Surface)
+    return !isMobile && (!hasTouch || window.screen.width >= 1024);
   }
 
   /**
@@ -70,15 +87,20 @@ class TTSService {
 
     // Start loading HeadTTS in the background (don't wait for it)
     // This allows the app to start quickly while neural TTS loads
+    // Only on desktop - mobile has excellent native TTS
     if (this.useNeural && !this.neuralInitStarted) {
       this.neuralInitStarted = true;
 
       headttsService.init().then((success) => {
-        if (!success) {
-          console.warn('HeadTTS failed to load');
+        if (success) {
+          console.log('HeadTTS: Neural TTS ready (desktop mode)');
+        } else {
+          console.log('HeadTTS: Falling back to Web Speech API');
+          this.useNeural = false; // Disable neural TTS if init failed
         }
       }).catch((error) => {
-        console.error('HeadTTS initialization error:', error);
+        console.log('HeadTTS: Using Web Speech API fallback');
+        this.useNeural = false; // Disable neural TTS if init failed
       });
     }
   }

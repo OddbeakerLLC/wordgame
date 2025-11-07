@@ -2,20 +2,21 @@
   "name": "Word Master Challenge - Spelling Game for Kids",
   "short_name": "Word Master",
   "description": "An interactive spelling game that helps children learn sight words through fun drills and daily quizzes with spaced repetition",
-  "start_url": "/",
+  "start_url": "/wordmaster/",
+  "scope": "/wordmaster/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#8b5cf6",
   "orientation": "any",
   "icons": [
     {
-      "src": "/icon-192.png",
+      "src": "/wordmaster/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "/icon-512.png",
+      "src": "/wordmaster/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"

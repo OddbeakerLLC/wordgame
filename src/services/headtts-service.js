@@ -42,18 +42,18 @@ class HeadTTSService {
       }
 
       // Determine the worker module path based on environment
+      const base = import.meta.env.BASE_URL || '/';
       const workerModulePath = import.meta.env.DEV
         ? new URL('@met4citizen/headtts/modules/worker-tts.mjs', import.meta.url).href
-        : new URL('../../../node_modules/@met4citizen/headtts/modules/worker-tts.mjs', import.meta.url).href;
+        : `${window.location.origin}${base}headtts/modules/worker-tts.mjs`;
 
-      // Set dictionary path to the node_modules location
-      // Must be a full absolute URL for Web Worker context
-      const dictionaryPath = import.meta.env.DEV
-        ? `${window.location.origin}/node_modules/@met4citizen/headtts/dictionaries/`
-        : new URL('../../../node_modules/@met4citizen/headtts/dictionaries/', import.meta.url).href;
+      // Dictionary URL - needs to be absolute URL or relative to worker location
+      const dictionaryURL = import.meta.env.DEV
+        ? "../dictionaries" // Relative to node_modules in dev
+        : `${window.location.origin}${base}headtts/dictionaries`; // Absolute in production
 
       console.log('HeadTTS: Worker module path:', workerModulePath);
-      console.log('HeadTTS: Dictionary path:', dictionaryPath);
+      console.log('HeadTTS: Dictionary URL:', dictionaryURL);
 
       // Create HeadTTS instance
       this.headtts = new HeadTTS({
@@ -62,7 +62,7 @@ class HeadTTSService {
         voices: [this.currentVoice], // Preload the default voice
         audioCtx: this.audioContext,
         workerModule: workerModulePath, // Explicitly set worker path for Vite
-        dictionaryURL: dictionaryPath, // Explicitly set dictionary path
+        dictionaryURL: dictionaryURL, // Dictionary location
         dtypeWebgpu: "fp32", // Best quality for WebGPU
         dtypeWasm: "q8", // Smaller model for WASM (88MB)
         defaultVoice: this.currentVoice,

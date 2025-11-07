@@ -1,12 +1,53 @@
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
+import { copyFileSync, mkdirSync } from 'fs';
+import { join } from 'path';
 
 export default defineConfig({
   base: '/wordmaster/',
   plugins: [
+    // Copy HeadTTS worker and language modules to public folder for production
+    {
+      name: 'copy-headtts-assets',
+      buildStart() {
+        try {
+          // Create headtts directories in public
+          mkdirSync('public/headtts/modules', { recursive: true });
+          mkdirSync('public/headtts/dictionaries', { recursive: true });
+
+          // Copy all necessary module files
+          const modulesToCopy = [
+            'worker-tts.mjs',
+            'language-en-us.mjs',
+            'language.mjs',
+            'utils.mjs'
+          ];
+
+          for (const module of modulesToCopy) {
+            copyFileSync(
+              `node_modules/@met4citizen/headtts/modules/${module}`,
+              `public/headtts/modules/${module}`
+            );
+          }
+
+          // Copy dictionary files
+          const dictionariesToCopy = ['en-us.txt'];
+          for (const dict of dictionariesToCopy) {
+            copyFileSync(
+              `node_modules/@met4citizen/headtts/dictionaries/${dict}`,
+              `public/headtts/dictionaries/${dict}`
+            );
+          }
+
+          console.log('HeadTTS assets copied to public folder');
+        } catch (error) {
+          console.warn('Failed to copy HeadTTS assets:', error.message);
+        }
+      }
+    },
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['sounds/**/*', 'icon.svg', 'icon-192.png', 'icon-512.png'],
+      includeAssets: ['sounds/**/*', 'icon.svg', 'icon-192.png', 'icon-512.png', 'headtts/**/*'],
       manifest: {
         name: 'Word Master Challenge - Spelling Game for Kids',
         short_name: 'Word Master',

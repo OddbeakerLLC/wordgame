@@ -25,7 +25,7 @@ export async function renderDailyQuiz(container, child, onComplete) {
   if (drilledWords.length === 0) {
     // No words to quiz
     container.innerHTML = `
-      <div class="min-h-screen flex items-center justify-center p-4">
+      <div class="flex justify-center p-4">
         <div class="card max-w-2xl w-full text-center">
           <h2 class="text-3xl font-bold text-gray-800 mb-4">No Words Ready</h2>
           <p class="text-xl text-gray-600 mb-6">
@@ -73,7 +73,7 @@ async function render(container, child, state, onComplete) {
   const total = state.quizLength;
 
   container.innerHTML = `
-    <div class="min-h-screen flex items-center justify-center p-2 sm:p-4">
+    <div class="flex justify-center p-2 sm:p-4">
       <div class="card max-w-3xl w-full p-4 sm:p-6">
         <div class="mb-4 sm:mb-6">
           <div class="flex items-center justify-between gap-2 mb-2">
@@ -490,7 +490,7 @@ function renderPerfectQuiz(container, state, onComplete) {
     .join('');
 
   container.innerHTML = `
-    <div class="min-h-screen flex items-center justify-center p-2 sm:p-4 bg-gradient-to-br from-yellow-50 to-orange-50 relative">
+    <div class="flex justify-center p-2 sm:p-4 bg-gradient-to-br from-yellow-50 to-orange-50 relative">
       <!-- Fireworks container (full screen) -->
       <div id="fireworks-container" class="absolute inset-0 pointer-events-none"></div>
 
@@ -576,7 +576,7 @@ function renderRegularCompletion(container, state, onComplete) {
     .join('');
 
   container.innerHTML = `
-    <div class="min-h-screen flex items-center justify-center p-2 sm:p-4">
+    <div class="flex justify-center p-2 sm:p-4">
       <div class="card max-w-4xl w-full p-4 sm:p-6 text-center">
         <div class="space-y-4 sm:space-y-6 py-6 sm:py-12">
           <div class="text-5xl sm:text-6xl animate-celebration">🎉</div>

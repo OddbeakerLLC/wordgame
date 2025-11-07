@@ -40,7 +40,7 @@ async function render(container, child, state, onComplete) {
   const total = state.words.length;
 
   container.innerHTML = `
-    <div class="min-h-screen flex items-center justify-center p-2 sm:p-4">
+    <div class="flex justify-center p-2 sm:p-4">
       <div class="card max-w-3xl w-full p-4 sm:p-6">
         <div class="mb-4 sm:mb-6">
           <div class="flex items-center justify-between gap-2 mb-2">

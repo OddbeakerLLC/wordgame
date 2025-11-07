@@ -8,7 +8,7 @@ export async function renderParentTeacher(container, onBack) {
   const children = await getChildren();
 
   container.innerHTML = `
-    <div class="min-h-screen p-4 py-8">
+    <div class="p-4">
       <div class="max-w-4xl mx-auto">
         <div class="card mb-6">
           <div class="flex items-center justify-between mb-6">

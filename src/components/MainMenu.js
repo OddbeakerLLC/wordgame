@@ -9,7 +9,7 @@ export async function renderMainMenu(container, child, handlers) {
   const undrilledWords = await getUndrilledWords(child.id);
 
   container.innerHTML = `
-    <div class="min-h-screen flex items-center justify-center p-4">
+    <div class="flex justify-center">
       <div class="card max-w-2xl w-full">
         <div class="text-center mb-8">
           <h1 class="text-4xl md:text-5xl font-bold text-primary-600 mb-2">

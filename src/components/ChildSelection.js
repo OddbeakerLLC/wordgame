@@ -8,12 +8,8 @@ export async function renderChildSelection(container, onChildSelected) {
   const children = await getChildren();
 
   container.innerHTML = `
-    <div class="min-h-screen flex items-center justify-center p-4">
+    <div class="flex justify-center">
       <div class="card max-w-2xl w-full">
-        <h1 class="text-4xl md:text-5xl font-bold text-center text-primary-600 mb-8">
-          Word Master Challenge
-        </h1>
-
         ${children.length > 0 ? `
           <h2 class="text-2xl font-bold text-gray-700 mb-6 text-center">
             Who's playing today?

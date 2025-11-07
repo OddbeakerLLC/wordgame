@@ -31,14 +31,32 @@ export async function renderApp(container) {
  * Render current view
  */
 function render(container) {
-  container.innerHTML = '';
+  container.innerHTML = `
+    <div class="w-full p-4">
+      <!-- Logo header -->
+      <div class="text-center mb-6">
+        <img src="${import.meta.env.BASE_URL}LogoLetterhead.png"
+             alt="Oddbeaker LLC"
+             class="mx-auto mb-2"
+             style="height: 100px; width: auto;">
+        <h1 class="text-3xl md:text-4xl font-bold text-primary-600">
+          Word Master Challenge
+        </h1>
+      </div>
+
+      <!-- Main content area -->
+      <div id="main-content"></div>
+    </div>
+  `;
+
+  const mainContent = container.querySelector('#main-content');
 
   switch (state.currentView) {
     case 'child-selection':
-      renderChildSelection(container, onChildSelected);
+      renderChildSelection(mainContent, onChildSelected);
       break;
     case 'main-menu':
-      renderMainMenu(container, state.currentChild, {
+      renderMainMenu(mainContent, state.currentChild, {
         onDailyQuiz: () => switchView('quiz'),
         onDrill: () => switchView('drill'),
         onParent: () => switchView('parent'),
@@ -49,13 +67,13 @@ function render(container) {
       });
       break;
     case 'drill':
-      renderWordDrill(container, state.currentChild, () => switchView('main-menu'));
+      renderWordDrill(mainContent, state.currentChild, () => switchView('main-menu'));
       break;
     case 'quiz':
-      renderDailyQuiz(container, state.currentChild, () => switchView('main-menu'));
+      renderDailyQuiz(mainContent, state.currentChild, () => switchView('main-menu'));
       break;
     case 'parent':
-      renderParentTeacher(container, () => switchView('main-menu'));
+      renderParentTeacher(mainContent, () => switchView('main-menu'));
       break;
   }
 }

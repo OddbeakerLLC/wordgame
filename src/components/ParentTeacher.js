@@ -96,6 +96,9 @@ function showMathChallenge(container, onSuccess, onBack) {
   const input = container.querySelector('#answer-input');
   const errorMessage = container.querySelector('#error-message');
 
+  // Focus the input field
+  input.focus();
+
   form.addEventListener('submit', (e) => {
     e.preventDefault();
     audio.playClick();

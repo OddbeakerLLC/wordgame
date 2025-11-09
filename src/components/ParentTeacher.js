@@ -2,9 +2,137 @@ import { getChildren, getWords, createWord, deleteWord, deleteChild, updateChild
 import audio from '../services/audio.js';
 
 /**
+ * Generate a random simple math problem with a 1-digit answer
+ */
+function generateMathProblem() {
+  const answer = Math.floor(Math.random() * 10); // 0-9
+  const operations = ['+', '-', '×', '÷'];
+  const op = operations[Math.floor(Math.random() * operations.length)];
+
+  let num1, num2;
+
+  switch(op) {
+    case '+':
+      num2 = Math.floor(Math.random() * answer);
+      num1 = answer - num2;
+      break;
+    case '-':
+      num2 = Math.floor(Math.random() * 10);
+      num1 = answer + num2;
+      break;
+    case '×':
+      if (answer === 0) {
+        num1 = 0;
+        num2 = Math.floor(Math.random() * 10);
+      } else {
+        const divisors = [1, 2, 3, 4, 5, 6, 7, 8, 9].filter(d => answer % d === 0);
+        num2 = divisors[Math.floor(Math.random() * divisors.length)] || 1;
+        num1 = answer / num2;
+      }
+      break;
+    case '÷':
+      num2 = Math.floor(Math.random() * 9) + 1;
+      num1 = answer * num2;
+      break;
+  }
+
+  return { num1, num2, op, answer };
+}
+
+/**
+ * Show math challenge before allowing access to Parent/Teacher interface
+ */
+function showMathChallenge(container, onSuccess, onBack) {
+  const problem = generateMathProblem();
+
+  container.innerHTML = `
+    <div class="p-4">
+      <div class="max-w-md mx-auto">
+        <div class="card">
+          <div class="text-center mb-6">
+            <h1 class="text-3xl font-bold text-primary-600 mb-2">Parent/Teacher Access</h1>
+            <p class="text-gray-600">Solve this problem to continue:</p>
+          </div>
+
+          <div class="bg-primary-50 rounded-xl p-8 mb-6 text-center">
+            <div class="text-5xl font-bold text-primary-700 mb-4">
+              ${problem.num1} ${problem.op} ${problem.num2} = ?
+            </div>
+          </div>
+
+          <form id="math-form" class="space-y-4">
+            <div>
+              <input
+                type="number"
+                id="answer-input"
+                placeholder="Your answer"
+                class="w-full px-6 py-4 text-2xl text-center border-2 border-gray-300 rounded-lg
+                       focus:border-primary-500 focus:outline-none"
+                min="0"
+                max="9"
+                required
+                autofocus>
+            </div>
+
+            <div id="error-message" class="text-red-600 text-center font-semibold hidden">
+              Incorrect. Try again!
+            </div>
+
+            <div class="flex gap-3">
+              <button type="button" id="back-btn" class="btn-secondary flex-1">
+                ← Back
+              </button>
+              <button type="submit" class="btn-primary flex-1">
+                Submit
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const form = container.querySelector('#math-form');
+  const input = container.querySelector('#answer-input');
+  const errorMessage = container.querySelector('#error-message');
+
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    audio.playClick();
+
+    const userAnswer = parseInt(input.value);
+
+    if (userAnswer === problem.answer) {
+      audio.playSuccess();
+      onSuccess();
+    } else {
+      audio.playBuzz();
+      setTimeout(() => {
+        onBack();
+      }, 500);
+    }
+  });
+
+  container.querySelector('#back-btn').addEventListener('click', () => {
+    audio.playClick();
+    onBack();
+  });
+}
+
+/**
  * Parent/Teacher Interface Component
  */
 export async function renderParentTeacher(container, onBack) {
+  // Show math challenge first
+  showMathChallenge(container, async () => {
+    await showParentTeacherInterface(container, onBack);
+  }, onBack);
+}
+
+/**
+ * Show the actual Parent/Teacher interface (after math challenge)
+ */
+async function showParentTeacherInterface(container, onBack) {
   const children = await getChildren();
 
   container.innerHTML = `

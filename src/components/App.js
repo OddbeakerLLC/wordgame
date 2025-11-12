@@ -1,4 +1,4 @@
-import { getChildren } from '../services/storage.js';
+import { getChildren, sortWordQueue } from '../services/storage.js';
 import { renderChildSelection } from './ChildSelection.js';
 import { renderMainMenu } from './MainMenu.js';
 import { renderParentTeacher } from './ParentTeacher.js';
@@ -10,7 +10,8 @@ import { renderDailyQuiz } from './DailyQuiz.js';
  */
 const state = {
   currentChild: null,
-  currentView: 'child-selection' // 'child-selection' | 'main-menu' | 'drill' | 'quiz' | 'parent'
+  currentView: 'child-selection', // 'child-selection' | 'main-menu' | 'drill' | 'quiz' | 'parent'
+  lastSelectedChildId: null // Store child ID separately for Parent/Teacher interface
 };
 
 /**
@@ -60,7 +61,6 @@ function render(container) {
         onDailyQuiz: () => switchView('quiz'),
         onDrill: () => switchView('drill'),
         onChangeChild: () => {
-          state.currentChild = null;
           switchView('child-selection');
         }
       });
@@ -72,14 +72,18 @@ function render(container) {
       renderDailyQuiz(mainContent, state.currentChild, () => switchView('main-menu'));
       break;
     case 'parent':
-      renderParentTeacher(mainContent, () => {
-        // Go back to main menu if child is selected, otherwise go to child selection
-        if (state.currentChild) {
-          switchView('main-menu');
-        } else {
-          switchView('child-selection');
-        }
-      });
+      renderParentTeacher(
+        mainContent,
+        () => {
+          // Go back to main menu if child is selected, otherwise go to child selection
+          if (state.currentChild) {
+            switchView('main-menu');
+          } else {
+            switchView('child-selection');
+          }
+        },
+        state.lastSelectedChildId
+      );
       break;
   }
 }
@@ -87,8 +91,14 @@ function render(container) {
 /**
  * Event Handlers
  */
-function onChildSelected(child) {
+async function onChildSelected(child) {
   state.currentChild = child;
+  state.lastSelectedChildId = child.id; // Store ID separately
+
+  // Sort the word queue on first selection
+  // This prioritizes words with high error rates and shorter words
+  await sortWordQueue(child.id);
+
   switchView('main-menu');
 }
 

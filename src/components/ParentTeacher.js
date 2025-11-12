@@ -125,17 +125,17 @@ function showMathChallenge(container, onSuccess, onBack) {
 /**
  * Parent/Teacher Interface Component
  */
-export async function renderParentTeacher(container, onBack) {
+export async function renderParentTeacher(container, onBack, selectedChildId) {
   // Show math challenge first
   showMathChallenge(container, async () => {
-    await showParentTeacherInterface(container, onBack);
+    await showParentTeacherInterface(container, onBack, selectedChildId);
   }, onBack);
 }
 
 /**
  * Show the actual Parent/Teacher interface (after math challenge)
  */
-async function showParentTeacherInterface(container, onBack) {
+async function showParentTeacherInterface(container, onBack, selectedChildId) {
   const children = await getChildren();
 
   container.innerHTML = `
@@ -178,9 +178,15 @@ async function showParentTeacherInterface(container, onBack) {
 
   const childSelect = container.querySelector('#child-select');
 
-  // Load first child by default if there are children
+  // Load appropriate child
   if (children.length > 0) {
-    await loadChildDetails(container, parseInt(childSelect.value));
+    // Set dropdown to selected child ID or first child
+    if (selectedChildId && children.some(c => c.id === selectedChildId)) {
+      childSelect.value = selectedChildId;
+    }
+
+    const childIdToLoad = parseInt(childSelect.value);
+    await loadChildDetails(container, childIdToLoad);
   } else {
     // No children yet, show the add form
     showAddChildForm(container, onBack);
@@ -285,13 +291,8 @@ function showAddChildForm(container, onBack) {
         const newChild = await createChild({ name, inputMethod, quizLength });
         audio.playSuccess();
 
-        // Reload the parent interface
-        await showParentTeacherInterface(container, onBack);
-
-        // Select the newly created child
-        const childSelect = container.querySelector('#child-select');
-        childSelect.value = newChild.id;
-        await loadChildDetails(container, newChild.id);
+        // Reload the parent interface with the new child selected
+        await showParentTeacherInterface(container, onBack, newChild.id);
       } catch (error) {
         console.error('Error creating child:', error);
         alert('Error creating profile: ' + error.message);
@@ -459,6 +460,33 @@ function attachChildDetailsListeners(container, child, detailsContainer) {
     const wordText = input.value.trim().toLowerCase();
 
     if (wordText) {
+      // Check for duplicates
+      const existingWords = await getWords(child.id);
+      const isDuplicate = existingWords.some(w => w.text.toLowerCase() === wordText);
+
+      if (isDuplicate) {
+        audio.playBuzz();
+        input.classList.add('border-red-500', 'shake');
+
+        // Show error message
+        let errorMsg = detailsContainer.querySelector('#word-error-msg');
+        if (!errorMsg) {
+          errorMsg = document.createElement('p');
+          errorMsg.id = 'word-error-msg';
+          errorMsg.className = 'text-red-600 text-sm font-semibold mt-2';
+          input.parentElement.appendChild(errorMsg);
+        }
+        errorMsg.textContent = `"${wordText}" is already in the word list!`;
+
+        setTimeout(() => {
+          input.classList.remove('border-red-500', 'shake');
+          if (errorMsg) {
+            errorMsg.remove();
+          }
+        }, 2000);
+        return;
+      }
+
       try {
         await createWord({ text: wordText, childId: child.id });
         input.value = '';
@@ -518,7 +546,7 @@ function attachChildDetailsListeners(container, child, detailsContainer) {
         `).join('');
       } else {
         // No more children, go back to parent interface (which will show the empty state)
-        await showParentTeacherInterface(container, onBack);
+        await showParentTeacherInterface(container, onBack, null);
       }
     }
   });

@@ -223,5 +223,46 @@ export async function recordAttempt(wordId, success, errorCount = 0) {
   await db.words.update(wordId, updates);
 }
 
+/**
+ * Sort word queue by failed attempts (one-time initialization)
+ * Priority:
+ * 1. Words with failed attempts (attempts > successes) come first, sorted by number of failures (descending)
+ * 2. Words with no failures stay in their original order at the back
+ */
+export async function sortWordQueue(childId) {
+  const words = await getWords(childId);
+
+  if (words.length === 0) return;
+
+  // Separate words into two groups
+  const wordsWithErrors = [];
+  const wordsWithoutErrors = [];
+
+  for (const word of words) {
+    const failureCount = word.attempts - word.successes;
+    if (failureCount > 0) {
+      wordsWithErrors.push({ word, failureCount });
+    } else {
+      wordsWithoutErrors.push(word);
+    }
+  }
+
+  // Sort words with errors by failure count (descending - most failures first)
+  wordsWithErrors.sort((a, b) => b.failureCount - a.failureCount);
+
+  // Combine: words with errors first, then words without errors (in original order)
+  const sortedWords = [
+    ...wordsWithErrors.map(item => item.word),
+    ...wordsWithoutErrors
+  ];
+
+  // Update positions in database
+  for (let i = 0; i < sortedWords.length; i++) {
+    await db.words.update(sortedWords[i].id, { position: i });
+  }
+
+  console.log(`Sorted ${words.length} words for child ${childId} (${wordsWithErrors.length} with errors)`);
+}
+
 // Export the database instance for advanced usage
 export { db };

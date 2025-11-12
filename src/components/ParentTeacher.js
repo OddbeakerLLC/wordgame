@@ -1,4 +1,4 @@
-import { getChildren, getWords, createWord, deleteWord, deleteChild, updateChild } from '../services/storage.js';
+import { getChildren, getWords, createWord, deleteWord, deleteChild, updateChild, createChild } from '../services/storage.js';
 import audio from '../services/audio.js';
 
 /**
@@ -149,29 +149,22 @@ async function showParentTeacherInterface(container, onBack) {
             </button>
           </div>
 
-          ${children.length === 0 ? `
-            <div class="bg-yellow-50 border-2 border-yellow-300 rounded-xl p-6 text-center">
-              <p class="text-lg text-gray-700">
-                No child profiles yet. Go back and create one first!
-              </p>
-            </div>
-          ` : `
-            <div class="mb-6">
-              <label class="block text-lg font-semibold text-gray-700 mb-2">
-                Select Child
-              </label>
-              <select id="child-select" class="w-full px-4 py-3 text-lg border-2 border-gray-300 rounded-lg
-                     focus:border-primary-500 focus:outline-none">
-                ${children.map(child => `
-                  <option value="${child.id}">${escapeHtml(child.name)}</option>
-                `).join('')}
-              </select>
-            </div>
+          <div class="mb-6">
+            <label class="block text-lg font-semibold text-gray-700 mb-2">
+              Select Child
+            </label>
+            <select id="child-select" class="w-full px-4 py-3 text-lg border-2 border-gray-300 rounded-lg
+                   focus:border-primary-500 focus:outline-none">
+              ${children.map(child => `
+                <option value="${child.id}">${escapeHtml(child.name)}</option>
+              `).join('')}
+              <option value="add-new">+ Add New Child</option>
+            </select>
+          </div>
 
-            <div id="child-details">
-              <!-- Child details will be loaded here -->
-            </div>
-          `}
+          <div id="child-details">
+            <!-- Child details or add form will be loaded here -->
+          </div>
         </div>
       </div>
     </div>
@@ -183,18 +176,128 @@ async function showParentTeacherInterface(container, onBack) {
     onBack();
   });
 
+  const childSelect = container.querySelector('#child-select');
+
+  // Load first child by default if there are children
   if (children.length > 0) {
-    const childSelect = container.querySelector('#child-select');
-
-    // Load first child by default
     await loadChildDetails(container, parseInt(childSelect.value));
-
-    // Handle child selection change
-    childSelect.addEventListener('change', async () => {
-      audio.playClick();
-      await loadChildDetails(container, parseInt(childSelect.value));
-    });
+  } else {
+    // No children yet, show the add form
+    showAddChildForm(container, onBack);
   }
+
+  // Handle child selection change
+  childSelect.addEventListener('change', async () => {
+    audio.playClick();
+    const selectedValue = childSelect.value;
+
+    if (selectedValue === 'add-new') {
+      showAddChildForm(container, onBack);
+    } else {
+      await loadChildDetails(container, parseInt(selectedValue));
+    }
+  });
+}
+
+/**
+ * Show form to add a new child
+ */
+function showAddChildForm(container, onBack) {
+  const detailsContainer = container.querySelector('#child-details');
+
+  detailsContainer.innerHTML = `
+    <div class="border-t-2 border-gray-200 pt-6">
+      <h2 class="text-2xl font-bold text-gray-800 mb-4">
+        Add New Child
+      </h2>
+
+      <form id="add-child-form" class="space-y-6">
+        <div>
+          <label class="block text-lg font-semibold text-gray-700 mb-2">
+            Child Name
+          </label>
+          <input
+            type="text"
+            id="child-name-input"
+            class="w-full px-4 py-3 text-lg border-2 border-gray-300 rounded-lg
+                   focus:border-primary-500 focus:outline-none"
+            placeholder="Enter child's name"
+            required
+            autofocus>
+        </div>
+
+        <div>
+          <label class="block text-lg font-semibold text-gray-700 mb-2">
+            Input Method
+          </label>
+          <select
+            id="input-method-select"
+            class="w-full px-4 py-3 text-lg border-2 border-gray-300 rounded-lg
+                   focus:border-primary-500 focus:outline-none">
+            <option value="keyboard">Keyboard Only</option>
+            <option value="onscreen">On-Screen Letters</option>
+            <option value="hybrid">Both (Hybrid)</option>
+          </select>
+          <p class="text-sm text-gray-600 mt-2">
+            Choose how the child will spell words
+          </p>
+        </div>
+
+        <div>
+          <label class="block text-lg font-semibold text-gray-700 mb-2">
+            Quiz Length
+          </label>
+          <input
+            type="number"
+            id="quiz-length-input"
+            min="1"
+            max="20"
+            value="10"
+            class="w-full px-4 py-3 text-lg border-2 border-gray-300 rounded-lg
+                   focus:border-primary-500 focus:outline-none">
+          <p class="text-sm text-gray-600 mt-2">
+            Number of words per quiz session (1-20)
+          </p>
+        </div>
+
+        <button type="submit" class="btn-primary w-full">
+          Create Child Profile
+        </button>
+      </form>
+    </div>
+  `;
+
+  // Focus on name input
+  const nameInput = detailsContainer.querySelector('#child-name-input');
+  setTimeout(() => nameInput.focus(), 100);
+
+  // Handle form submission
+  detailsContainer.querySelector('#add-child-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    audio.playClick();
+
+    const name = nameInput.value.trim();
+    const inputMethod = detailsContainer.querySelector('#input-method-select').value;
+    const quizLength = parseInt(detailsContainer.querySelector('#quiz-length-input').value);
+
+    if (name) {
+      try {
+        const newChild = await createChild({ name, inputMethod, quizLength });
+        audio.playSuccess();
+
+        // Reload the parent interface
+        await showParentTeacherInterface(container, onBack);
+
+        // Select the newly created child
+        const childSelect = container.querySelector('#child-select');
+        childSelect.value = newChild.id;
+        await loadChildDetails(container, newChild.id);
+      } catch (error) {
+        console.error('Error creating child:', error);
+        alert('Error creating profile: ' + error.message);
+      }
+    }
+  });
 }
 
 /**
@@ -414,8 +517,8 @@ function attachChildDetailsListeners(container, child, detailsContainer) {
           <option value="${c.id}">${escapeHtml(c.name)}</option>
         `).join('');
       } else {
-        // No more children, reload the whole interface
-        location.reload();
+        // No more children, go back to parent interface (which will show the empty state)
+        await showParentTeacherInterface(container, onBack);
       }
     }
   });

@@ -1,10 +1,10 @@
-import { getChildren, createChild } from '../services/storage.js';
+import { getChildren } from '../services/storage.js';
 import audio from '../services/audio.js';
 
 /**
  * Child Selection Screen
  */
-export async function renderChildSelection(container, onChildSelected) {
+export async function renderChildSelection(container, onChildSelected, onParentTeacher) {
   const children = await getChildren();
 
   container.innerHTML = `
@@ -31,13 +31,13 @@ export async function renderChildSelection(container, onChildSelected) {
             Let's get started!
           </h2>
           <p class="text-lg text-gray-600 mb-6 text-center">
-            Create your first player profile to begin
+            Click Parent/Teacher below to create your first player profile
           </p>
         `}
 
         <div class="border-t-2 border-gray-200 pt-6">
-          <button id="add-child-btn" class="btn-secondary w-full">
-            + Add New Player
+          <button id="parent-teacher-btn" class="btn-secondary w-full">
+            Parent/Teacher
           </button>
         </div>
       </div>
@@ -57,114 +57,10 @@ export async function renderChildSelection(container, onChildSelected) {
     });
   });
 
-  container.querySelector('#add-child-btn').addEventListener('click', () => {
+  container.querySelector('#parent-teacher-btn').addEventListener('click', () => {
     audio.playClick();
-    showAddChildModal(container, onChildSelected);
-  });
-}
-
-/**
- * Show modal to add new child
- */
-function showAddChildModal(container, onChildSelected) {
-  const modal = document.createElement('div');
-  modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50';
-  modal.innerHTML = `
-    <div class="card max-w-md w-full">
-      <h3 class="text-2xl font-bold text-gray-800 mb-4">Add New Player</h3>
-
-      <form id="add-child-form">
-        <div class="mb-4">
-          <label class="block text-lg font-semibold text-gray-700 mb-2">
-            Player Name
-          </label>
-          <input
-            type="text"
-            id="child-name-input"
-            class="w-full px-4 py-3 text-lg border-2 border-gray-300 rounded-lg
-                   focus:border-primary-500 focus:outline-none"
-            placeholder="Enter name"
-            required
-            autofocus>
-        </div>
-
-        <div class="mb-6">
-          <label class="block text-lg font-semibold text-gray-700 mb-2">
-            Input Method
-          </label>
-          <select
-            id="input-method-select"
-            class="w-full px-4 py-3 text-lg border-2 border-gray-300 rounded-lg
-                   focus:border-primary-500 focus:outline-none">
-            <option value="keyboard">Keyboard Only</option>
-            <option value="onscreen">On-Screen Letters</option>
-            <option value="hybrid">Both (Hybrid)</option>
-          </select>
-          <p class="text-sm text-gray-600 mt-2">
-            Choose how the player will spell words
-          </p>
-        </div>
-
-        <div class="flex gap-3">
-          <button type="submit" class="btn-primary flex-1">
-            Create Profile
-          </button>
-          <button type="button" id="cancel-btn" class="btn-secondary flex-1">
-            Cancel
-          </button>
-        </div>
-      </form>
-    </div>
-  `;
-
-  document.body.appendChild(modal);
-
-  // Focus on input
-  const input = modal.querySelector('#child-name-input');
-  setTimeout(() => input.focus(), 100);
-
-  // Handle form submission
-  modal.querySelector('#add-child-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    audio.playClick();
-
-    const name = input.value.trim();
-    const inputMethod = modal.querySelector('#input-method-select').value;
-
-    if (name) {
-      try {
-        const child = await createChild({ name, inputMethod });
-        console.log('Child created:', child);
-        document.body.removeChild(modal);
-
-        // Refresh the view
-        await renderChildSelection(container, onChildSelected);
-
-        // Auto-select if this is the first child
-        const children = await getChildren();
-        console.log('Total children:', children.length);
-        if (children.length === 1) {
-          console.log('Auto-selecting first child');
-          onChildSelected(child);
-        }
-      } catch (error) {
-        console.error('Error creating child:', error);
-        alert('Error creating profile: ' + error.message);
-      }
-    }
-  });
-
-  // Handle cancel
-  modal.querySelector('#cancel-btn').addEventListener('click', () => {
-    audio.playClick();
-    document.body.removeChild(modal);
-  });
-
-  // Close on backdrop click
-  modal.addEventListener('click', (e) => {
-    if (e.target === modal) {
-      audio.playClick();
-      document.body.removeChild(modal);
+    if (onParentTeacher) {
+      onParentTeacher();
     }
   });
 }

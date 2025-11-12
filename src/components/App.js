@@ -53,13 +53,12 @@ function render(container) {
 
   switch (state.currentView) {
     case 'child-selection':
-      renderChildSelection(mainContent, onChildSelected);
+      renderChildSelection(mainContent, onChildSelected, () => switchView('parent'));
       break;
     case 'main-menu':
       renderMainMenu(mainContent, state.currentChild, {
         onDailyQuiz: () => switchView('quiz'),
         onDrill: () => switchView('drill'),
-        onParent: () => switchView('parent'),
         onChangeChild: () => {
           state.currentChild = null;
           switchView('child-selection');
@@ -73,7 +72,14 @@ function render(container) {
       renderDailyQuiz(mainContent, state.currentChild, () => switchView('main-menu'));
       break;
     case 'parent':
-      renderParentTeacher(mainContent, () => switchView('main-menu'));
+      renderParentTeacher(mainContent, () => {
+        // Go back to main menu if child is selected, otherwise go to child selection
+        if (state.currentChild) {
+          switchView('main-menu');
+        } else {
+          switchView('child-selection');
+        }
+      });
       break;
   }
 }

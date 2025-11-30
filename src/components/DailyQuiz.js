@@ -3,6 +3,7 @@ import {
   recordAttempt,
   moveWordToBack,
   moveWordToSecond,
+  markWordDrilled,
 } from "../services/storage.js";
 import tts from "../services/tts.js";
 import audio from "../services/audio.js";
@@ -14,22 +15,21 @@ import { Fireworks } from 'fireworks-js';
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
- * Daily Quiz Component
- * Tests words by speaking them (not showing) and having the child spell them
+ * Daily Quiz Component (Unified Learning & Testing)
+ * Shows ALL words (both new and learned), teaches new words, then tests them
  */
 export async function renderDailyQuiz(container, child, onComplete) {
-  // Get drilled words (only quiz words that have been learned)
+  // Get all words for this child
   const allWords = await getWords(child.id);
-  const drilledWords = allWords.filter((w) => w.drilled);
 
-  if (drilledWords.length === 0) {
+  if (allWords.length === 0) {
     // No words to quiz
     container.innerHTML = `
       <div class="flex justify-center p-4">
         <div class="card max-w-2xl w-full text-center">
           <h2 class="text-3xl font-bold text-gray-800 mb-4">No Words Ready</h2>
           <p class="text-xl text-gray-600 mb-6">
-            You need to learn some words first before you can take a quiz!
+            You need some words first before you can start a challenge!
           </p>
           <button id="back-btn" class="btn-primary">
             Back to Menu
@@ -46,7 +46,7 @@ export async function renderDailyQuiz(container, child, onComplete) {
   }
 
   // Pull the first N words from the queue for this quiz session
-  const quizQueue = drilledWords.slice(0, child.quizLength);
+  const quizQueue = allWords.slice(0, child.quizLength);
 
   const state = {
     quizQueue: quizQueue, // Words for this quiz session
@@ -78,7 +78,7 @@ async function render(container, child, state, onComplete) {
         <div class="mb-4 sm:mb-6">
           <div class="flex items-center justify-between gap-2 mb-2">
             <h2 class="text-lg sm:text-2xl font-bold text-primary-600 truncate flex-shrink">
-              Daily Quiz
+              Word Master Challenge
             </h2>
             <div class="flex items-center gap-2 sm:gap-4 flex-shrink-0">
               <span class="text-sm sm:text-lg text-gray-600 whitespace-nowrap">${progress}/${total}</span>
@@ -118,8 +118,97 @@ async function render(container, child, state, onComplete) {
 
 /**
  * Render the quiz for a single word
+ * If the word hasn't been drilled yet, teach it first
  */
 async function renderQuizWord(
+  content,
+  word,
+  child,
+  state,
+  container,
+  onComplete
+) {
+  // Check if this word needs to be taught first
+  if (!word.drilled) {
+    await teachNewWord(content, word, child, state, container, onComplete);
+  } else {
+    await renderQuizTest(content, word, child, state, container, onComplete);
+  }
+}
+
+/**
+ * Teach a new word (intro → showing → spelling → practice)
+ */
+async function teachNewWord(
+  content,
+  word,
+  child,
+  state,
+  container,
+  onComplete
+) {
+  // Phase 1: Intro
+  content.innerHTML = `
+    <div class="space-y-4 sm:space-y-6">
+      <h3 class="text-2xl sm:text-3xl font-bold text-gray-800">Let's learn a new word!</h3>
+      <p class="text-lg sm:text-xl text-gray-600">Get ready...</p>
+      <div class="animate-bounce text-5xl sm:text-6xl">📖</div>
+    </div>
+  `;
+  await sleep(1500);
+
+  // Phase 2: Showing - Display and speak the word
+  content.innerHTML = `
+    <div class="space-y-6 sm:space-y-8">
+      <p class="text-xl sm:text-2xl text-gray-600">Here's your new word:</p>
+      <div class="text-5xl sm:text-7xl font-bold text-primary-600 animate-bounce-in">
+        ${escapeHtml(word.text)}
+      </div>
+      <p class="text-lg sm:text-xl text-gray-500">Listen carefully...</p>
+    </div>
+  `;
+  await tts.speakWord(word.text);
+  await sleep(1000);
+
+  // Phase 3: Spelling - Spell out letter by letter
+  content.innerHTML = `
+    <div class="space-y-6 sm:space-y-8">
+      <p class="text-xl sm:text-2xl text-gray-600">Let's spell it together:</p>
+      <div class="text-4xl sm:text-6xl font-bold text-primary-600">
+        ${escapeHtml(word.text)}
+      </div>
+      <div id="letter-display" class="flex justify-center gap-1.5 sm:gap-2 flex-wrap">
+        ${word.text
+          .split("")
+          .map(
+            (letter, i) => `
+          <div class="letter-box" id="letter-${i}">
+            ${escapeHtml(letter.toUpperCase())}
+          </div>
+        `
+          )
+          .join("")}
+      </div>
+    </div>
+  `;
+
+  // Spell out each letter with highlighting
+  const letters = word.text.split("");
+  for (let i = 0; i < letters.length; i++) {
+    const letterBox = content.querySelector(`#letter-${i}`);
+    letterBox.classList.add("filled");
+    await tts.speakLetter(letters[i]);
+  }
+  await sleep(1000);
+
+  // Phase 4: Practice - Now you try!
+  await renderQuizTest(content, word, child, state, container, onComplete);
+}
+
+/**
+ * Render the actual quiz test (after teaching if needed)
+ */
+async function renderQuizTest(
   content,
   word,
   child,
@@ -406,6 +495,12 @@ async function completeQuizWord(
 
   // Mark this word as attempted
   state.attemptedWords.add(word.text);
+
+  // Mark word as drilled if it's a new word (this happens after first successful spell)
+  if (!word.drilled) {
+    await markWordDrilled(word.id);
+    word.drilled = true; // Update local copy
+  }
 
   // Record the attempt in the database
   await recordAttempt(word.id, !hadErrors);

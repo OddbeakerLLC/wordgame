@@ -2,7 +2,6 @@ import { getChildren, sortWordQueue } from '../services/storage.js';
 import { renderChildSelection } from './ChildSelection.js';
 import { renderMainMenu } from './MainMenu.js';
 import { renderParentTeacher } from './ParentTeacher.js';
-import { renderWordDrill } from './WordDrill.js';
 import { renderDailyQuiz } from './DailyQuiz.js';
 import { renderAbout } from './About.js';
 
@@ -11,7 +10,7 @@ import { renderAbout } from './About.js';
  */
 const state = {
   currentChild: null,
-  currentView: 'child-selection', // 'child-selection' | 'main-menu' | 'drill' | 'quiz' | 'parent' | 'about'
+  currentView: 'child-selection', // 'child-selection' | 'main-menu' | 'quiz' | 'parent' | 'about'
   lastSelectedChildId: null // Store child ID separately for Parent/Teacher interface
 };
 
@@ -65,15 +64,11 @@ function render(container) {
     case 'main-menu':
       renderMainMenu(mainContent, state.currentChild, {
         onDailyQuiz: () => switchView('quiz'),
-        onDrill: () => switchView('drill'),
         onChangeChild: () => {
           switchView('child-selection');
         },
         onAbout: () => switchView('about')
       });
-      break;
-    case 'drill':
-      renderWordDrill(mainContent, state.currentChild, () => switchView('main-menu'));
       break;
     case 'quiz':
       renderDailyQuiz(mainContent, state.currentChild, () => switchView('main-menu'));

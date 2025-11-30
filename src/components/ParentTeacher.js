@@ -280,7 +280,7 @@ function showAddChildForm(container, onBack) {
 
         <div>
           <label class="block text-lg font-semibold text-gray-700 mb-2">
-            Quiz Length
+            Challenge Length
           </label>
           <input
             type="number"
@@ -291,24 +291,7 @@ function showAddChildForm(container, onBack) {
             class="w-full px-4 py-3 text-lg border-2 border-gray-300 rounded-lg
                    focus:border-primary-500 focus:outline-none">
           <p class="text-sm text-gray-600 mt-2">
-            Number of words per quiz session (1-20)
-          </p>
-        </div>
-
-        <div>
-          <label class="block text-lg font-semibold text-gray-700 mb-2">
-            Drill Length
-          </label>
-          <input
-            type="number"
-            id="drill-length-input"
-            min="1"
-            max="20"
-            value="5"
-            class="w-full px-4 py-3 text-lg border-2 border-gray-300 rounded-lg
-                   focus:border-primary-500 focus:outline-none">
-          <p class="text-sm text-gray-600 mt-2">
-            Number of new words to learn per drill session (1-20)
+            Number of words per challenge session (1-20)
           </p>
         </div>
 
@@ -331,11 +314,10 @@ function showAddChildForm(container, onBack) {
     const name = nameInput.value.trim();
     const inputMethod = detailsContainer.querySelector('#input-method-select').value;
     const quizLength = parseInt(detailsContainer.querySelector('#quiz-length-input').value);
-    const drillLength = parseInt(detailsContainer.querySelector('#drill-length-input').value);
 
     if (name) {
       try {
-        const newChild = await createChild({ name, inputMethod, quizLength, drillLength });
+        const newChild = await createChild({ name, inputMethod, quizLength });
         audio.playSuccess();
 
         // Reload the parent interface with the new child selected
@@ -388,18 +370,9 @@ async function loadChildDetails(container, childId) {
 
           <div>
             <label class="block text-sm font-semibold text-gray-700 mb-2">
-              Quiz Length (words to complete)
+              Challenge Length (words per session)
             </label>
             <input type="number" id="quiz-length" min="1" max="20" value="${child.quizLength}"
-                   class="w-full px-3 py-2 border-2 border-gray-300 rounded-lg
-                          focus:border-primary-500 focus:outline-none">
-          </div>
-
-          <div>
-            <label class="block text-sm font-semibold text-gray-700 mb-2">
-              Drill Length (new words per session)
-            </label>
-            <input type="number" id="drill-length" min="1" max="20" value="${child.drillLength || 5}"
                    class="w-full px-3 py-2 border-2 border-gray-300 rounded-lg
                           focus:border-primary-500 focus:outline-none">
           </div>
@@ -527,9 +500,8 @@ function attachChildDetailsListeners(container, child, detailsContainer) {
     audio.playClick();
     const inputMethod = detailsContainer.querySelector('#input-method').value;
     const quizLength = parseInt(detailsContainer.querySelector('#quiz-length').value);
-    const drillLength = parseInt(detailsContainer.querySelector('#drill-length').value);
 
-    await updateChild(child.id, { inputMethod, quizLength, drillLength });
+    await updateChild(child.id, { inputMethod, quizLength });
 
     // Show feedback
     const btn = detailsContainer.querySelector('#save-settings-btn');

@@ -185,18 +185,6 @@ export async function moveWordToSecond(wordId) {
 }
 
 /**
- * Get words that haven't been drilled yet
- */
-export async function getUndrilledWords(childId) {
-  const words = await db.words
-    .where('childId')
-    .equals(childId)
-    .and(w => !w.drilled)
-    .sortBy('position');
-  return words.map(w => new Word(w));
-}
-
-/**
  * Mark word as drilled
  */
 export async function markWordDrilled(wordId) {

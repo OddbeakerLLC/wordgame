@@ -17,13 +17,16 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
  */
 export async function renderWordDrill(container, child, onComplete) {
   // Get undrilled words
-  const words = await getUndrilledWords(child.id);
+  const allWords = await getUndrilledWords(child.id);
 
-  if (words.length === 0) {
+  if (allWords.length === 0) {
     // No words to drill
     onComplete();
     return;
   }
+
+  // Limit words to drillLength (similar to how quiz works with quizLength)
+  const words = allWords.slice(0, child.drillLength);
 
   const state = {
     words,

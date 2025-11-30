@@ -7,6 +7,7 @@ export class Child {
     this.name = data.name || '';
     this.inputMethod = data.inputMethod || 'keyboard'; // 'keyboard' | 'onscreen' | 'hybrid'
     this.quizLength = data.quizLength || 5; // Number of words to complete quiz
+    this.drillLength = data.drillLength || 5; // Number of words to drill per session
     this.createdAt = data.createdAt || new Date().toISOString();
   }
 
@@ -16,6 +17,7 @@ export class Child {
       name: this.name,
       inputMethod: this.inputMethod,
       quizLength: this.quizLength,
+      drillLength: this.drillLength,
       createdAt: this.createdAt
     };
   }

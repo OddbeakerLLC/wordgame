@@ -264,5 +264,45 @@ export async function sortWordQueue(childId) {
   console.log(`Sorted ${words.length} words for child ${childId} (${wordsWithErrors.length} with errors)`);
 }
 
+/**
+ * Import common words for a child (with duplicate checking)
+ * Returns the count of new words added
+ */
+export async function importCommonWords(childId, wordList) {
+  // Get existing words to check for duplicates
+  const existingWords = await getWords(childId);
+  const existingWordTexts = new Set(existingWords.map(w => w.text.toLowerCase()));
+
+  // Filter out duplicates
+  const newWords = wordList.filter(word => !existingWordTexts.has(word.toLowerCase()));
+
+  if (newWords.length === 0) {
+    return { added: 0, skipped: wordList.length };
+  }
+
+  // Get current max position
+  const maxPosition = existingWords.length > 0 ? Math.max(...existingWords.map(w => w.position)) : -1;
+
+  // Add all new words at the back of the queue
+  for (let i = 0; i < newWords.length; i++) {
+    const word = new Word({
+      text: newWords[i].toLowerCase(),
+      childId: childId,
+      position: maxPosition + 1 + i
+    });
+
+    const data = word.toJSON();
+    delete data.id;
+    await db.words.add(data);
+  }
+
+  console.log(`Imported ${newWords.length} new words for child ${childId} (skipped ${wordList.length - newWords.length} duplicates)`);
+
+  return {
+    added: newWords.length,
+    skipped: wordList.length - newWords.length
+  };
+}
+
 // Export the database instance for advanced usage
 export { db };

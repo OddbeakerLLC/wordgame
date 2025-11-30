@@ -1,5 +1,6 @@
-import { getChildren, getWords, createWord, deleteWord, deleteChild, updateChild, createChild } from '../services/storage.js';
+import { getChildren, getWords, createWord, deleteWord, deleteChild, updateChild, createChild, importCommonWords } from '../services/storage.js';
 import audio from '../services/audio.js';
+import { COMMON_WORDS } from '../data/commonWords.js';
 
 /**
  * Generate a random simple math problem with a 1-digit answer
@@ -266,6 +267,23 @@ function showAddChildForm(container, onBack) {
           </p>
         </div>
 
+        <div>
+          <label class="block text-lg font-semibold text-gray-700 mb-2">
+            Drill Length
+          </label>
+          <input
+            type="number"
+            id="drill-length-input"
+            min="1"
+            max="20"
+            value="5"
+            class="w-full px-4 py-3 text-lg border-2 border-gray-300 rounded-lg
+                   focus:border-primary-500 focus:outline-none">
+          <p class="text-sm text-gray-600 mt-2">
+            Number of new words to learn per drill session (1-20)
+          </p>
+        </div>
+
         <button type="submit" class="btn-primary w-full">
           Create Child Profile
         </button>
@@ -285,10 +303,11 @@ function showAddChildForm(container, onBack) {
     const name = nameInput.value.trim();
     const inputMethod = detailsContainer.querySelector('#input-method-select').value;
     const quizLength = parseInt(detailsContainer.querySelector('#quiz-length-input').value);
+    const drillLength = parseInt(detailsContainer.querySelector('#drill-length-input').value);
 
     if (name) {
       try {
-        const newChild = await createChild({ name, inputMethod, quizLength });
+        const newChild = await createChild({ name, inputMethod, quizLength, drillLength });
         audio.playSuccess();
 
         // Reload the parent interface with the new child selected
@@ -311,6 +330,13 @@ async function loadChildDetails(container, childId) {
 
   const words = await getWords(childId);
   const detailsContainer = container.querySelector('#child-details');
+
+  // Calculate how many common words are present
+  const existingWordTexts = new Set(words.map(w => w.text.toLowerCase()));
+  const commonWordsPresent = COMMON_WORDS.filter(word =>
+    existingWordTexts.has(word.toLowerCase())
+  ).length;
+  const missingCommonWords = COMMON_WORDS.length - commonWordsPresent;
 
   detailsContainer.innerHTML = `
     <div class="border-t-2 border-gray-200 pt-6">
@@ -340,6 +366,15 @@ async function loadChildDetails(container, childId) {
                    class="w-full px-3 py-2 border-2 border-gray-300 rounded-lg
                           focus:border-primary-500 focus:outline-none">
           </div>
+
+          <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-2">
+              Drill Length (new words per session)
+            </label>
+            <input type="number" id="drill-length" min="1" max="20" value="${child.drillLength || 5}"
+                   class="w-full px-3 py-2 border-2 border-gray-300 rounded-lg
+                          focus:border-primary-500 focus:outline-none">
+          </div>
         </div>
 
         <button id="save-settings-btn" class="btn-primary">
@@ -366,6 +401,33 @@ async function loadChildDetails(container, childId) {
             </button>
           </form>
         </div>
+
+        ${missingCommonWords > 0 ? `
+          <div class="mb-4 p-4 bg-blue-50 border-2 border-blue-300 rounded-lg">
+            <div class="flex items-center justify-between">
+              <div>
+                <h4 class="font-semibold text-gray-800 mb-1">Quick Start: Load Common Words</h4>
+                <p class="text-sm text-gray-600">
+                  Add the ${missingCommonWords} remaining common word${missingCommonWords !== 1 ? 's' : ''} to the queue
+                  ${commonWordsPresent > 0 ? `(${commonWordsPresent} already added)` : ''}
+                </p>
+              </div>
+              <button id="load-common-words-btn" class="btn-primary whitespace-nowrap">
+                Load ${missingCommonWords} Word${missingCommonWords !== 1 ? 's' : ''}
+              </button>
+            </div>
+          </div>
+        ` : `
+          <div class="mb-4 p-4 bg-green-50 border-2 border-green-300 rounded-lg">
+            <div class="flex items-center gap-3">
+              <div class="text-green-600 text-2xl">✓</div>
+              <div>
+                <h4 class="font-semibold text-gray-800 mb-1">All 100 common words loaded!</h4>
+                <p class="text-sm text-gray-600">Great job! You can add more words manually above.</p>
+              </div>
+            </div>
+          </div>
+        `}
 
         ${words.length > 0 ? `
           <div class="bg-white rounded-lg border-2 border-gray-200 overflow-hidden">
@@ -437,8 +499,9 @@ function attachChildDetailsListeners(container, child, detailsContainer) {
     audio.playClick();
     const inputMethod = detailsContainer.querySelector('#input-method').value;
     const quizLength = parseInt(detailsContainer.querySelector('#quiz-length').value);
+    const drillLength = parseInt(detailsContainer.querySelector('#drill-length').value);
 
-    await updateChild(child.id, { inputMethod, quizLength });
+    await updateChild(child.id, { inputMethod, quizLength, drillLength });
 
     // Show feedback
     const btn = detailsContainer.querySelector('#save-settings-btn');
@@ -450,6 +513,46 @@ function attachChildDetailsListeners(container, child, detailsContainer) {
       btn.classList.remove('bg-green-600');
     }, 1500);
   });
+
+  // Load common words button (only exists if there are missing words)
+  const loadCommonWordsBtn = detailsContainer.querySelector('#load-common-words-btn');
+  if (loadCommonWordsBtn) {
+    loadCommonWordsBtn.addEventListener('click', async () => {
+      audio.playClick();
+      const btn = detailsContainer.querySelector('#load-common-words-btn');
+      const originalText = btn.textContent;
+
+      // Disable button and show loading state
+      btn.disabled = true;
+      btn.textContent = 'Loading...';
+
+      try {
+        const result = await importCommonWords(child.id, COMMON_WORDS);
+
+        // Show success feedback
+        audio.playSuccess();
+        btn.textContent = `Added ${result.added} word${result.added !== 1 ? 's' : ''}!`;
+        btn.classList.add('bg-green-600');
+
+        // Reload child details after a short delay
+        setTimeout(async () => {
+          await loadChildDetails(container, child.id);
+        }, 1500);
+
+      } catch (error) {
+        console.error('Error loading common words:', error);
+        audio.playBuzz();
+        btn.textContent = 'Error!';
+        btn.classList.add('bg-red-600');
+
+        setTimeout(() => {
+          btn.textContent = originalText;
+          btn.classList.remove('bg-red-600');
+          btn.disabled = false;
+        }, 2000);
+      }
+    });
+  }
 
   // Add word form
   detailsContainer.querySelector('#add-word-form').addEventListener('submit', async (e) => {
@@ -534,18 +637,22 @@ function attachChildDetailsListeners(container, child, detailsContainer) {
 
     if (confirmText === child.name) {
       await deleteChild(child.id);
+      audio.playSuccess();
 
-      // Reload the parent interface
+      // Reload the parent interface completely
       const children = await getChildren();
       if (children.length > 0) {
-        await loadChildDetails(container, children[0].id);
-        // Update the select dropdown
+        // Update the select dropdown with all children + "Add New Child" option
         const select = container.querySelector('#child-select');
         select.innerHTML = children.map(c => `
           <option value="${c.id}">${escapeHtml(c.name)}</option>
-        `).join('');
+        `).join('') + '<option value="add-new">+ Add New Child</option>';
+
+        // Set dropdown to first child and load their details
+        select.value = children[0].id;
+        await loadChildDetails(container, children[0].id);
       } else {
-        // No more children, go back to parent interface (which will show the empty state)
+        // No more children, reload parent interface to show "Add New Child" form
         await showParentTeacherInterface(container, onBack, null);
       }
     }

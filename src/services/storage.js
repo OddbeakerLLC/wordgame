@@ -3,7 +3,7 @@ import { Child } from '../models/Child.js';
 import { Word } from '../models/Word.js';
 
 // Initialize Dexie database
-const db = new Dexie('WordQuestDB');
+const db = new Dexie('WordMasterDB');
 
 db.version(1).stores({
   children: '++id, name, createdAt',

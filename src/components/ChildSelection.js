@@ -4,7 +4,7 @@ import audio from '../services/audio.js';
 /**
  * Child Selection Screen
  */
-export async function renderChildSelection(container, onChildSelected, onParentTeacher) {
+export async function renderChildSelection(container, onChildSelected, onParentTeacher, onAbout) {
   const children = await getChildren();
 
   container.innerHTML = `
@@ -35,10 +35,16 @@ export async function renderChildSelection(container, onChildSelected, onParentT
           </p>
         `}
 
-        <div class="border-t-2 border-gray-200 pt-6">
+        <div class="border-t-2 border-gray-200 pt-6 space-y-3">
           <button id="parent-teacher-btn" class="btn-secondary w-full">
             Parent/Teacher
           </button>
+
+          <div class="text-center">
+            <button id="about-btn" class="text-sm text-gray-600 hover:text-primary-600 underline">
+              About • Privacy • Terms
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -61,6 +67,13 @@ export async function renderChildSelection(container, onChildSelected, onParentT
     audio.playClick();
     if (onParentTeacher) {
       onParentTeacher();
+    }
+  });
+
+  container.querySelector('#about-btn').addEventListener('click', () => {
+    audio.playClick();
+    if (onAbout) {
+      onAbout();
     }
   });
 }

@@ -53,10 +53,16 @@ export async function renderMainMenu(container, child, handlers) {
           `}
         </div>
 
-        <div class="border-t-2 border-gray-200 pt-6">
+        <div class="border-t-2 border-gray-200 pt-6 space-y-3">
           <button id="change-child-btn" class="btn-secondary w-full">
             Change Player
           </button>
+
+          <div class="text-center">
+            <button id="about-btn" class="text-sm text-gray-600 hover:text-primary-600 underline">
+              About • Privacy • Terms
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -82,6 +88,13 @@ export async function renderMainMenu(container, child, handlers) {
   container.querySelector('#change-child-btn').addEventListener('click', () => {
     audio.playClick();
     handlers.onChangeChild();
+  });
+
+  container.querySelector('#about-btn').addEventListener('click', () => {
+    audio.playClick();
+    if (handlers.onAbout) {
+      handlers.onAbout();
+    }
   });
 }
 

@@ -4,13 +4,14 @@ import { renderMainMenu } from './MainMenu.js';
 import { renderParentTeacher } from './ParentTeacher.js';
 import { renderWordDrill } from './WordDrill.js';
 import { renderDailyQuiz } from './DailyQuiz.js';
+import { renderAbout } from './About.js';
 
 /**
  * Application State
  */
 const state = {
   currentChild: null,
-  currentView: 'child-selection', // 'child-selection' | 'main-menu' | 'drill' | 'quiz' | 'parent'
+  currentView: 'child-selection', // 'child-selection' | 'main-menu' | 'drill' | 'quiz' | 'parent' | 'about'
   lastSelectedChildId: null // Store child ID separately for Parent/Teacher interface
 };
 
@@ -54,7 +55,12 @@ function render(container) {
 
   switch (state.currentView) {
     case 'child-selection':
-      renderChildSelection(mainContent, onChildSelected, () => switchView('parent'));
+      renderChildSelection(
+        mainContent,
+        onChildSelected,
+        () => switchView('parent'),
+        () => switchView('about')
+      );
       break;
     case 'main-menu':
       renderMainMenu(mainContent, state.currentChild, {
@@ -62,7 +68,8 @@ function render(container) {
         onDrill: () => switchView('drill'),
         onChangeChild: () => {
           switchView('child-selection');
-        }
+        },
+        onAbout: () => switchView('about')
       });
       break;
     case 'drill':
@@ -84,6 +91,16 @@ function render(container) {
         },
         state.lastSelectedChildId
       );
+      break;
+    case 'about':
+      renderAbout(mainContent, () => {
+        // Go back to main menu if child is selected, otherwise go to child selection
+        if (state.currentChild) {
+          switchView('main-menu');
+        } else {
+          switchView('child-selection');
+        }
+      });
       break;
   }
 }

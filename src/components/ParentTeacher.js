@@ -1,6 +1,8 @@
 import { getChildren, getWords, createWord, deleteWord, deleteChild, updateChild, createChild, importCommonWords } from '../services/storage.js';
 import audio from '../services/audio.js';
 import { COMMON_WORDS } from '../data/commonWords.js';
+import * as googleSync from '../services/googleDriveSync.js';
+import { renderApp } from './App.js';
 
 /**
  * Generate a random simple math problem with a 1-digit answer
@@ -150,6 +152,29 @@ async function showParentTeacherInterface(container, onBack, selectedChildId) {
             </button>
           </div>
 
+          <!-- Cloud Sync Section -->
+          <div id="cloud-sync-section" class="mb-6 p-4 bg-gradient-to-r from-purple-50 to-blue-50 border-2 border-purple-300 rounded-lg">
+            <div class="flex items-center justify-between">
+              <div>
+                <h3 class="text-lg font-bold text-gray-800 mb-1">☁️ Cloud Sync</h3>
+                <p id="sync-status-text" class="text-sm text-gray-600">
+                  Not connected
+                </p>
+              </div>
+              <div class="flex gap-2">
+                <button id="connect-drive-btn" class="btn-primary whitespace-nowrap">
+                  Connect Google Drive
+                </button>
+                <button id="sync-now-btn" class="btn-secondary hidden">
+                  Sync Now
+                </button>
+                <button id="disconnect-drive-btn" class="btn-secondary text-red-600 border-red-600 hover:bg-red-50 hidden">
+                  Disconnect
+                </button>
+              </div>
+            </div>
+          </div>
+
           <div class="mb-6">
             <label class="block text-lg font-semibold text-gray-700 mb-2">
               Select Child
@@ -176,6 +201,9 @@ async function showParentTeacherInterface(container, onBack, selectedChildId) {
     audio.playClick();
     onBack();
   });
+
+  // Initialize cloud sync
+  setupCloudSync(container);
 
   const childSelect = container.querySelector('#child-select');
 
@@ -663,4 +691,128 @@ function escapeHtml(text) {
   const div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;
+}
+
+/**
+ * Setup cloud sync UI and event listeners
+ */
+async function setupCloudSync(container) {
+  const connectBtn = container.querySelector('#connect-drive-btn');
+  const syncBtn = container.querySelector('#sync-now-btn');
+  const disconnectBtn = container.querySelector('#disconnect-drive-btn');
+  const statusText = container.querySelector('#sync-status-text');
+
+  // Initialize Google API
+  try {
+    await googleSync.autoInit();
+  } catch (error) {
+    console.error('Failed to initialize Google Drive sync:', error);
+    statusText.textContent = 'Cloud sync unavailable';
+    connectBtn.disabled = true;
+    return;
+  }
+
+  // Update UI based on connection status
+  const updateSyncUI = (status) => {
+    const isConnected = googleSync.isSignedIn();
+
+    if (isConnected) {
+      connectBtn.classList.add('hidden');
+      syncBtn.classList.remove('hidden');
+      disconnectBtn.classList.remove('hidden');
+
+      if (status?.syncing) {
+        statusText.textContent = 'Syncing...';
+        syncBtn.disabled = true;
+      } else {
+        const lastSync = googleSync.getLastSyncTime();
+        if (lastSync) {
+          const date = new Date(lastSync);
+          statusText.textContent = `Last synced: ${date.toLocaleString()}`;
+        } else {
+          statusText.textContent = 'Connected';
+        }
+        syncBtn.disabled = false;
+      }
+    } else {
+      connectBtn.classList.remove('hidden');
+      syncBtn.classList.add('hidden');
+      disconnectBtn.classList.add('hidden');
+      statusText.textContent = 'Not connected';
+    }
+
+    if (status?.error) {
+      statusText.textContent = `Error: ${status.error}`;
+      statusText.classList.add('text-red-600');
+    } else {
+      statusText.classList.remove('text-red-600');
+    }
+  };
+
+  // Set up status callback
+  googleSync.setSyncStatusCallback(updateSyncUI);
+
+  // Initial UI update
+  updateSyncUI();
+
+  // Connect button
+  connectBtn.addEventListener('click', async () => {
+    audio.playClick();
+    connectBtn.disabled = true;
+    connectBtn.textContent = 'Connecting...';
+
+    try {
+      await googleSync.signInToGoogleDrive();
+      // After connecting, sync from cloud
+      await googleSync.syncFromCloud();
+      audio.playSuccess();
+
+      // Reload the page to show cloud data
+      const app = document.querySelector('#app');
+      if (app) {
+        renderApp(app);
+      }
+    } catch (error) {
+      console.error('Error connecting to Google Drive:', error);
+      audio.playBuzz();
+      connectBtn.textContent = 'Connect Google Drive';
+      connectBtn.disabled = false;
+      alert('Failed to connect to Google Drive. Please try again.');
+    }
+  });
+
+  // Sync now button
+  syncBtn.addEventListener('click', async () => {
+    audio.playClick();
+    const originalText = syncBtn.textContent;
+    syncBtn.disabled = true;
+    syncBtn.textContent = 'Syncing...';
+
+    try {
+      await googleSync.syncToCloud();
+      audio.playSuccess();
+      syncBtn.textContent = 'Synced!';
+      setTimeout(() => {
+        syncBtn.textContent = originalText;
+        syncBtn.disabled = false;
+      }, 1500);
+    } catch (error) {
+      console.error('Error syncing:', error);
+      audio.playBuzz();
+      syncBtn.textContent = originalText;
+      syncBtn.disabled = false;
+      alert('Failed to sync. Please try again.');
+    }
+  });
+
+  // Disconnect button
+  disconnectBtn.addEventListener('click', () => {
+    audio.playClick();
+
+    if (confirm('Disconnect from Google Drive? Your data will remain on this device, but will no longer sync.')) {
+      googleSync.signOutFromGoogleDrive();
+      audio.playSuccess();
+      updateSyncUI();
+    }
+  });
 }

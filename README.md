@@ -1,14 +1,15 @@
-# Word Quest
+# Word Master Challenge
 
 A progressive web app (PWA) designed to help children master sight-reading and spelling through interactive drills and intelligent spaced repetition.
 
 ## Overview
 
-Word Quest is a pedagogically-sound spelling game that uses multi-sensory learning (visual, auditory, and kinesthetic) combined with immediate error correction and spaced repetition to help children learn to spell the words they encounter most often in daily life and on their devices.
+Word Master Challenge is a pedagogically-sound spelling game that uses multi-sensory learning (visual, auditory, and kinesthetic) combined with immediate error correction and spaced repetition to help children learn to spell the words they encounter most often in daily life and on their devices.
 
 ## Features
 
 ### For Kids
+
 - **Interactive Word Drills**: Learn new words through seeing, hearing, and typing
 - **Daily Quiz Mode**: Practice spelling from your personal word queue
 - **Immediate Feedback**: Hear each letter as you type it
@@ -17,6 +18,7 @@ Word Quest is a pedagogically-sound spelling game that uses multi-sensory learni
 - **3D Visual Effects**: Engaging three.js powered animations
 
 ### For Parents & Teachers
+
 - **Multiple Child Profiles**: Each child gets their own word list and progress
 - **Easy Word Management**: Add, view, and remove words for each child
 - **Intelligent Queue System**: Words adapt to each child's learning pace
@@ -28,7 +30,7 @@ Word Quest is a pedagogically-sound spelling game that uses multi-sensory learni
 
 ### The Learning Algorithm
 
-Word Quest uses an intelligent queue system designed around spaced repetition:
+Word Master Challenge uses an intelligent queue system designed around spaced repetition:
 
 1. **New words** are added to the front of the queue and must be drilled before quizzing
 2. **During drills**, children see the word, hear it spoken, and hear it spelled out letter-by-letter
@@ -42,6 +44,7 @@ This ensures children get more practice on difficult words while maintaining var
 ### Error Handling
 
 When a child types an incorrect letter:
+
 1. A buzzer sound plays
 2. The correct letter is shown highlighted
 3. Text-to-speech speaks the correct letter name
@@ -64,7 +67,7 @@ This immediate correction prevents practicing incorrect spellings while reinforc
 
 ### For Users
 
-Visit [deployed URL] and click "Install" in your browser to add Word Quest to your home screen.
+Visit [deployed URL] and click "Install" in your browser to add Word Master Challenge to your home screen.
 
 ### For Developers
 
@@ -122,6 +125,7 @@ wordgame/
 ### Parent/Teacher Features
 
 Access the parent/teacher interface to:
+
 - Add new child profiles
 - Add words to each child's queue
 - View existing words in the queue
@@ -132,6 +136,7 @@ Access the parent/teacher interface to:
 ## Contributing
 
 Contributions are welcome! This project is designed to help children learn, so we prioritize:
+
 - **Accessibility**: Ensuring all children can use the app
 - **Simplicity**: Keeping the interface intuitive
 - **Evidence-based learning**: Features should align with learning science

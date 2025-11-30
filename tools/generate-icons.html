@@ -1,50 +1,53 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Icon Generator</title>
-  <style>
-    body {
-      font-family: system-ui, sans-serif;
-      max-width: 800px;
-      margin: 50px auto;
-      padding: 20px;
-    }
-    canvas {
-      border: 1px solid #ccc;
-      margin: 10px 0;
-    }
-    button {
-      background: #8b5cf6;
-      color: white;
-      border: none;
-      padding: 10px 20px;
-      border-radius: 5px;
-      cursor: pointer;
-      margin: 5px;
-    }
-    button:hover {
-      background: #7c3aed;
-    }
-  </style>
-</head>
-<body>
-  <h1>Word Quest Icon Generator</h1>
-  <p>This tool generates PNG icons from the SVG icon. Click the buttons below to download the icons.</p>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Icon Generator</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        max-width: 800px;
+        margin: 50px auto;
+        padding: 20px;
+      }
+      canvas {
+        border: 1px solid #ccc;
+        margin: 10px 0;
+      }
+      button {
+        background: #8b5cf6;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 5px;
+        cursor: pointer;
+        margin: 5px;
+      }
+      button:hover {
+        background: #7c3aed;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Word Master Challenge Icon Generator</h1>
+    <p>
+      This tool generates PNG icons from the SVG icon. Click the buttons below
+      to download the icons.
+    </p>
 
-  <canvas id="canvas-192" width="192" height="192"></canvas>
-  <br>
-  <button onclick="downloadIcon(192)">Download 192x192</button>
+    <canvas id="canvas-192" width="192" height="192"></canvas>
+    <br />
+    <button onclick="downloadIcon(192)">Download 192x192</button>
 
-  <br><br>
+    <br /><br />
 
-  <canvas id="canvas-512" width="512" height="512"></canvas>
-  <br>
-  <button onclick="downloadIcon(512)">Download 512x512</button>
+    <canvas id="canvas-512" width="512" height="512"></canvas>
+    <br />
+    <button onclick="downloadIcon(512)">Download 512x512</button>
 
-  <script>
-    const svgString = `
+    <script>
+      const svgString = `
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <defs>
     <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -75,39 +78,39 @@
   </g>
 </svg>`;
 
-    function renderIcon(size) {
-      const canvas = document.getElementById(`canvas-${size}`);
-      const ctx = canvas.getContext('2d');
+      function renderIcon(size) {
+        const canvas = document.getElementById(`canvas-${size}`);
+        const ctx = canvas.getContext("2d");
 
-      const img = new Image();
-      const blob = new Blob([svgString], { type: 'image/svg+xml' });
-      const url = URL.createObjectURL(blob);
-
-      img.onload = function() {
-        ctx.drawImage(img, 0, 0, size, size);
-        URL.revokeObjectURL(url);
-      };
-
-      img.src = url;
-    }
-
-    function downloadIcon(size) {
-      const canvas = document.getElementById(`canvas-${size}`);
-      canvas.toBlob(function(blob) {
+        const img = new Image();
+        const blob = new Blob([svgString], { type: "image/svg+xml" });
         const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `icon-${size}.png`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      });
-    }
 
-    // Render icons on load
-    renderIcon(192);
-    renderIcon(512);
-  </script>
-</body>
+        img.onload = function () {
+          ctx.drawImage(img, 0, 0, size, size);
+          URL.revokeObjectURL(url);
+        };
+
+        img.src = url;
+      }
+
+      function downloadIcon(size) {
+        const canvas = document.getElementById(`canvas-${size}`);
+        canvas.toBlob(function (blob) {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `icon-${size}.png`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        });
+      }
+
+      // Render icons on load
+      renderIcon(192);
+      renderIcon(512);
+    </script>
+  </body>
 </html>

@@ -4,6 +4,7 @@ import { renderMainMenu } from './MainMenu.js';
 import { renderParentTeacher } from './ParentTeacher.js';
 import { renderDailyQuiz } from './DailyQuiz.js';
 import { renderAbout } from './About.js';
+import * as googleSync from '../services/googleDriveSync.js';
 
 /**
  * Application State
@@ -18,6 +19,9 @@ const state = {
  * Main App Component
  */
 export async function renderApp(container) {
+  // Trigger background sync if signed in (quietly, don't block UI)
+  triggerBackgroundSync();
+
   // Check if we have any children
   const children = await getChildren();
 
@@ -26,6 +30,33 @@ export async function renderApp(container) {
   }
 
   render(container);
+}
+
+/**
+ * Trigger background sync on app launch (non-blocking)
+ */
+async function triggerBackgroundSync() {
+  try {
+    // Initialize Google services first
+    const initialized = await googleSync.autoInit();
+
+    if (initialized && googleSync.isSignedIn()) {
+      console.log('User is signed in, syncing in background...');
+      // Fire and forget - don't await, don't block UI
+      googleSync.syncFromCloud()
+        .then(() => {
+          console.log('Background sync completed');
+          // If we're on a screen that shows data, we might want to refresh
+          // For now, just log - the next navigation will show updated data
+        })
+        .catch(err => {
+          // Token might be expired, just log the error
+          console.log('Background sync failed (this is OK if token expired):', err.message);
+        });
+    }
+  } catch (error) {
+    console.error('Error initializing background sync:', error);
+  }
 }
 
 /**

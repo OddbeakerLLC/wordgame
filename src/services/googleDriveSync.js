@@ -111,8 +111,11 @@ export async function signInToGoogleDrive() {
       accessToken = response.access_token;
       gapi.client.setToken({ access_token: accessToken });
 
+      // Store token for future sessions (note: tokens expire, but this allows auto-refresh)
+      localStorage.setItem("wordmaster-google-token", accessToken);
+
       console.log("Signed in to Google Drive");
-      notifyStatusChange({ connected: true, lastSync: null });
+      notifyStatusChange({ connected: true, lastSync: getLastSyncTime() });
       resolve();
     };
 
@@ -137,6 +140,10 @@ export function signOutFromGoogleDrive() {
     });
     accessToken = null;
     gapi.client.setToken(null);
+
+    // Clear stored token
+    localStorage.removeItem("wordmaster-google-token");
+
     notifyStatusChange({ connected: false, lastSync: null });
   }
 }
@@ -169,7 +176,7 @@ async function exportAllData() {
 }
 
 /**
- * Import data into IndexedDB
+ * Import data into IndexedDB (FULL REPLACE - used for initial sync)
  */
 async function importAllData(data) {
   if (!data || data.version !== 1) {
@@ -203,6 +210,100 @@ async function importAllData(data) {
   console.log(
     `Imported ${data.children.length} children and ${data.words.length} words`
   );
+}
+
+/**
+ * Merge cloud data with local data intelligently
+ * - Match children and words by name/text
+ * - Update drilled status, attempts, successes, errors from cloud if cloud has more data
+ * - Keep local position (queue order)
+ */
+async function mergeCloudData(cloudData) {
+  if (!cloudData || cloudData.version !== 1) {
+    throw new Error("Invalid data format");
+  }
+
+  const localChildren = await getChildren();
+  const childNameMap = new Map(); // child name -> local child ID
+
+  // Map local children by name
+  for (const child of localChildren) {
+    childNameMap.set(child.name.toLowerCase(), child.id);
+  }
+
+  // Process cloud children - add missing ones
+  for (const cloudChild of cloudData.children) {
+    const childName = cloudChild.name.toLowerCase();
+    if (!childNameMap.has(childName)) {
+      // New child from cloud - add it
+      delete cloudChild.id;
+      const newId = await db.children.add(cloudChild);
+      childNameMap.set(childName, newId);
+      console.log(`Added new child from cloud: ${cloudChild.name}`);
+    }
+  }
+
+  // Process cloud words
+  for (const cloudWord of cloudData.words) {
+    // Find the corresponding child
+    const cloudChildData = cloudData.children.find(c => c.id === cloudWord.childId);
+    if (!cloudChildData) continue;
+
+    const localChildId = childNameMap.get(cloudChildData.name.toLowerCase());
+    if (!localChildId) continue;
+
+    // Find matching local word by text and childId
+    const localWords = await getWords(localChildId);
+    const localWord = localWords.find(w => w.text.toLowerCase() === cloudWord.text.toLowerCase());
+
+    if (localWord) {
+      // Word exists locally - merge data
+      const updates = {};
+
+      // Always take cloud's drilled status if it's true (word was learned on another device)
+      if (cloudWord.drilled && !localWord.drilled) {
+        updates.drilled = true;
+        console.log(`Marking word as drilled from cloud: ${cloudWord.text}`);
+      }
+
+      // Take cloud's stats if they show more practice
+      if (cloudWord.attempts > localWord.attempts) {
+        updates.attempts = cloudWord.attempts;
+        updates.successes = cloudWord.successes;
+        updates.errors = cloudWord.errors;
+        console.log(`Updating stats from cloud for: ${cloudWord.text}`);
+      }
+
+      // Update lastPracticed if cloud is more recent
+      if (cloudWord.lastPracticed &&
+          (!localWord.lastPracticed ||
+           new Date(cloudWord.lastPracticed) > new Date(localWord.lastPracticed))) {
+        updates.lastPracticed = cloudWord.lastPracticed;
+      }
+
+      // Apply updates if any
+      if (Object.keys(updates).length > 0) {
+        await db.words.update(localWord.id, updates);
+      }
+    } else {
+      // New word from cloud - add it
+      const newWord = {
+        text: cloudWord.text,
+        childId: localChildId,
+        position: localWords.length, // Add to end of queue
+        drilled: cloudWord.drilled,
+        attempts: cloudWord.attempts,
+        successes: cloudWord.successes,
+        errors: cloudWord.errors,
+        lastPracticed: cloudWord.lastPracticed,
+        createdAt: cloudWord.createdAt
+      };
+      await db.words.add(newWord);
+      console.log(`Added new word from cloud: ${cloudWord.text}`);
+    }
+  }
+
+  console.log('Merged cloud data successfully');
 }
 
 /**
@@ -296,7 +397,7 @@ async function downloadFromGoogleDrive() {
 }
 
 /**
- * Sync to cloud (upload current data)
+ * Sync to cloud (download first, then upload merged data)
  */
 export async function syncToCloud() {
   if (!isSignedIn()) {
@@ -306,6 +407,15 @@ export async function syncToCloud() {
   notifyStatusChange({ syncing: true });
 
   try {
+    // First, sync down to get any changes from other devices
+    const cloudData = await downloadFromGoogleDrive();
+
+    if (cloudData) {
+      console.log("Merging cloud data before uploading...");
+      await mergeCloudData(cloudData);
+    }
+
+    // Now export and upload the merged data
     const data = await exportAllData();
     await uploadToGoogleDrive(data);
 
@@ -342,33 +452,35 @@ export async function syncFromCloud() {
 
     if (!cloudData) {
       // No data in cloud, upload current data
+      console.log("No cloud data found, uploading local data");
       return await syncToCloud();
     }
 
-    // Compare timestamps
-    const localData = await exportAllData();
-    const cloudTimestamp = new Date(cloudData.lastSync).getTime();
-    const localTimestamp = new Date(localData.lastSync).getTime();
+    // Check if this is the first sync for this device
+    const localChildren = await getChildren();
+    const hasLocalData = localChildren.length > 0;
 
-    if (cloudTimestamp > localTimestamp) {
-      // Cloud is newer, import it
+    if (!hasLocalData) {
+      // First sync on empty device - do full import
+      console.log("First sync - importing all cloud data");
       await importAllData(cloudData);
-
-      const lastSync = cloudData.lastSync;
-      localStorage.setItem("wordmaster-last-sync", lastSync);
-
-      console.log("Synced from cloud successfully");
-      notifyStatusChange({
-        connected: true,
-        lastSync: lastSync,
-        syncing: false,
-      });
-
-      return { success: true, imported: true, lastSync };
     } else {
-      // Local is newer or same, upload to cloud
-      return await syncToCloud();
+      // Merge cloud data with local data
+      console.log("Merging cloud data with local data");
+      await mergeCloudData(cloudData);
     }
+
+    const lastSync = cloudData.lastSync;
+    localStorage.setItem("wordmaster-last-sync", lastSync);
+
+    console.log("Synced from cloud successfully");
+    notifyStatusChange({
+      connected: true,
+      lastSync: lastSync,
+      syncing: false,
+    });
+
+    return { success: true, imported: true, lastSync };
   } catch (error) {
     console.error("Error syncing from cloud:", error);
     notifyStatusChange({ syncing: false, error: error.message });

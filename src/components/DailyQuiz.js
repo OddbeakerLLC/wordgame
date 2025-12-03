@@ -8,11 +8,30 @@ import {
 import tts from "../services/tts.js";
 import audio from "../services/audio.js";
 import { Fireworks } from 'fireworks-js';
+import * as googleSync from '../services/googleDriveSync.js';
 
 /**
  * Helper function for delays
  */
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Helper function to sync quiz data to Google Drive
+ */
+async function syncAfterQuiz() {
+  // Only sync if signed in
+  if (!googleSync.isSignedIn()) {
+    return;
+  }
+
+  try {
+    await googleSync.syncToCloud();
+    console.log('Quiz data synced to Google Drive');
+  } catch (error) {
+    console.error('Error syncing after quiz:', error);
+    // Don't show error to user - sync failure shouldn't interrupt their flow
+  }
+}
 
 /**
  * Daily Quiz Component (Unified Learning & Testing)
@@ -653,10 +672,14 @@ function renderPerfectQuiz(container, state, onComplete) {
 
   fireworks.start();
 
-  container.querySelector("#done-btn").addEventListener("click", () => {
+  container.querySelector("#done-btn").addEventListener("click", async () => {
     audio.playClick();
     audio.stop('huge-applause');
     fireworks.stop();
+
+    // Sync to cloud if connected
+    await syncAfterQuiz();
+
     onComplete();
   });
 }
@@ -714,9 +737,13 @@ function renderRegularCompletion(container, state, onComplete) {
 
   audio.playApplause();
 
-  container.querySelector("#done-btn").addEventListener("click", () => {
+  container.querySelector("#done-btn").addEventListener("click", async () => {
     audio.playClick();
     audio.stop('applause');
+
+    // Sync to cloud if connected
+    await syncAfterQuiz();
+
     onComplete();
   });
 }

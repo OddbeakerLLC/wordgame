@@ -25,3 +25,6 @@ dist-ssr
 
 # YGT configuration (contains project-specific settings)
 .claude-ygt.json
+
+# Configuration files (may contain API keys)
+config.php

@@ -5,9 +5,20 @@ import { Word } from '../models/Word.js';
 // Initialize Dexie database
 const db = new Dexie('WordMasterDB');
 
+// Version 1: Original schema
 db.version(1).stores({
   children: '++id, name, createdAt',
   words: '++id, childId, position, drilled, createdAt, [childId+position]'
+});
+
+// Version 2: Add audioBlob support for ElevenLabs TTS caching
+db.version(2).stores({
+  children: '++id, name, createdAt',
+  words: '++id, childId, position, drilled, createdAt, [childId+position]'
+}).upgrade(tx => {
+  // No schema change needed - Dexie handles adding new fields automatically
+  // audioBlob will be stored as a Blob object in IndexedDB
+  console.log('Database upgraded to version 2 (audioBlob support added)');
 });
 
 /**
@@ -77,7 +88,7 @@ export async function getWord(id) {
   return word ? new Word(word) : null;
 }
 
-export async function createWord(wordData) {
+export async function createWord(wordData, audioBlob = null) {
   const word = new Word(wordData);
 
   // Get current words for this child to determine position
@@ -93,6 +104,12 @@ export async function createWord(wordData) {
   const data = word.toJSON();
   // Remove id for auto-increment
   delete data.id;
+
+  // Add audioBlob if provided (will be stored as Blob in IndexedDB)
+  if (audioBlob) {
+    data.audioBlob = audioBlob;
+  }
+
   const id = await db.words.add(data);
   word.id = id;
   return word;
@@ -255,14 +272,23 @@ export async function sortWordQueue(childId) {
 /**
  * Import common words for a child (with duplicate checking)
  * Returns the count of new words added
+ * @param {number} childId - Child ID
+ * @param {Array<string|Object>} wordList - Array of word strings or objects with {text, audioBlob}
  */
 export async function importCommonWords(childId, wordList) {
   // Get existing words to check for duplicates
   const existingWords = await getWords(childId);
   const existingWordTexts = new Set(existingWords.map(w => w.text.toLowerCase()));
 
+  // Normalize wordList to objects with text and optional audioBlob
+  const normalizedWords = wordList.map(item =>
+    typeof item === 'string' ? { text: item, audioBlob: null } : item
+  );
+
   // Filter out duplicates
-  const newWords = wordList.filter(word => !existingWordTexts.has(word.toLowerCase()));
+  const newWords = normalizedWords.filter(item =>
+    !existingWordTexts.has(item.text.toLowerCase())
+  );
 
   if (newWords.length === 0) {
     return { added: 0, skipped: wordList.length };
@@ -274,13 +300,19 @@ export async function importCommonWords(childId, wordList) {
   // Add all new words at the back of the queue
   for (let i = 0; i < newWords.length; i++) {
     const word = new Word({
-      text: newWords[i].toLowerCase(),
+      text: newWords[i].text.toLowerCase(),
       childId: childId,
       position: maxPosition + 1 + i
     });
 
     const data = word.toJSON();
     delete data.id;
+
+    // Add audioBlob if provided
+    if (newWords[i].audioBlob) {
+      data.audioBlob = newWords[i].audioBlob;
+    }
+
     await db.words.add(data);
   }
 

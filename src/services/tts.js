@@ -4,6 +4,7 @@
  */
 
 import headttsService from "./headtts-service.js";
+import { getLetterAudio, getPromptAudio } from "./systemAudio.js";
 
 class TTSService {
   constructor() {
@@ -186,9 +187,39 @@ class TTSService {
   }
 
   /**
-   * Speak a word
+   * Speak a word (with optional cached audio blob)
+   * @param {string} word - The word text to speak
+   * @param {Blob|null} audioBlob - Optional pre-generated audio blob from ElevenLabs
    */
-  async speakWord(word) {
+  async speakWord(word, audioBlob = null) {
+    // If we have cached audio from ElevenLabs, use it for better quality
+    if (audioBlob && audioBlob instanceof Blob) {
+      try {
+        const audioUrl = URL.createObjectURL(audioBlob);
+        const audio = new Audio(audioUrl);
+
+        // Wait for audio to finish playing
+        await new Promise((resolve, reject) => {
+          audio.onended = () => {
+            URL.revokeObjectURL(audioUrl); // Clean up
+            resolve();
+          };
+          audio.onerror = (error) => {
+            console.warn('Error playing cached audio, falling back to TTS:', error);
+            URL.revokeObjectURL(audioUrl); // Clean up
+            reject(error);
+          };
+          audio.play().catch(reject);
+        });
+
+        return;
+      } catch (error) {
+        console.warn('Failed to play cached audio, falling back to Web Speech API:', error);
+        // Fall through to Web Speech API
+      }
+    }
+
+    // Fallback to Web Speech API
     return this.speak(word, { rate: 0.85 });
   }
 
@@ -209,10 +240,75 @@ class TTSService {
   }
 
   /**
-   * Speak a single letter
+   * Speak a single letter (with optional cached audio)
    */
   async speakLetter(letter) {
+    // Try to use cached ElevenLabs audio first
+    const audioBlob = getLetterAudio(letter);
+    if (audioBlob) {
+      console.log(`Using cached ElevenLabs audio for letter: ${letter}`);
+      try {
+        const audioUrl = URL.createObjectURL(audioBlob);
+        const audio = new Audio(audioUrl);
+
+        await new Promise((resolve, reject) => {
+          audio.onended = () => {
+            URL.revokeObjectURL(audioUrl);
+            resolve();
+          };
+          audio.onerror = (error) => {
+            console.warn(`Error playing cached letter audio for "${letter}", falling back to TTS:`, error);
+            URL.revokeObjectURL(audioUrl);
+            reject(error);
+          };
+          audio.play().catch(reject);
+        });
+
+        return;
+      } catch (error) {
+        console.warn(`Failed to play cached letter audio for "${letter}":`, error);
+        // Fall through to TTS
+      }
+    }
+
+    // Fallback to Web Speech API / HeadTTS
     return this.speak(letter, { rate: 0.85 });
+  }
+
+  /**
+   * Speak a system prompt (with optional cached audio)
+   * @param {string} prompt - The prompt text (e.g., "Let's learn a new word")
+   */
+  async speakPrompt(prompt) {
+    // Try to use cached ElevenLabs audio first
+    const audioBlob = getPromptAudio(prompt);
+    if (audioBlob) {
+      try {
+        const audioUrl = URL.createObjectURL(audioBlob);
+        const audio = new Audio(audioUrl);
+
+        await new Promise((resolve, reject) => {
+          audio.onended = () => {
+            URL.revokeObjectURL(audioUrl);
+            resolve();
+          };
+          audio.onerror = (error) => {
+            console.warn(`Error playing cached prompt audio for "${prompt}", falling back to TTS:`, error);
+            URL.revokeObjectURL(audioUrl);
+            reject(error);
+          };
+          audio.play().catch(reject);
+        });
+
+        return;
+      } catch (error) {
+        console.warn(`Failed to play cached prompt audio for "${prompt}":`, error);
+        // Fall through to TTS
+      }
+    }
+
+    // Fallback to Web Speech API / HeadTTS
+    return this.speak(prompt, { rate: 0.9 });
   }
 
   /**

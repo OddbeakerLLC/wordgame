@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bulk Audio Generator - Word Master Challenge</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+        }
+        .log-entry {
+            padding: 0.5rem;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .log-success { background-color: #d1fae5; }
+        .log-error { background-color: #fee2e2; }
+        .log-info { background-color: #dbeafe; }
+    </style>
+</head>
+<body class="bg-gray-100 p-8">
+    <div class="max-w-4xl mx-auto">
+        <div class="bg-white rounded-lg shadow-lg p-8">
+            <h1 class="text-3xl font-bold text-blue-600 mb-2">🎙️ Bulk Audio Generator</h1>
+            <p class="text-gray-600 mb-6">Generate ElevenLabs audio for the 100 most common words</p>
+
+            <div class="mb-6 p-4 bg-yellow-50 border-2 border-yellow-300 rounded-lg">
+                <h3 class="font-bold text-gray-800 mb-2">⚠️ Setup Instructions</h3>
+                <ol class="list-decimal list-inside text-sm text-gray-700 space-y-1">
+                    <li>Make sure you've created <code class="bg-gray-200 px-1 rounded">config.php</code> with your ElevenLabs API key</li>
+                    <li>Ensure <code class="bg-gray-200 px-1 rounded">api/tts.php</code> is accessible from this page</li>
+                    <li>This tool will generate audio for all 100 common words</li>
+                    <li>Download the generated JSON file when complete</li>
+                    <li>Use the "Load Common Words" button in the app to import with audio</li>
+                </ol>
+            </div>
+
+            <div class="mb-6">
+                <h3 class="text-xl font-bold text-gray-800 mb-3">Generation Settings</h3>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">
+                            Delay Between Requests (ms)
+                        </label>
+                        <input type="number" id="delay-input" value="100" min="0" max="5000"
+                               class="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none">
+                        <p class="text-xs text-gray-500 mt-1">Avoid rate limiting (100-500ms recommended)</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">
+                            Total Words
+                        </label>
+                        <input type="text" value="100" disabled
+                               class="w-full px-3 py-2 border-2 border-gray-300 rounded-lg bg-gray-50">
+                    </div>
+                </div>
+            </div>
+
+            <div class="mb-6">
+                <button id="test-btn"
+                        class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-lg transition-colors mb-3">
+                    🧪 Test API Connection
+                </button>
+                <button id="start-btn"
+                        class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-6 rounded-lg transition-colors">
+                    🎙️ Start Bulk Generation
+                </button>
+                <button id="download-btn" disabled
+                        class="w-full mt-3 bg-green-600 hover:bg-green-700 text-white font-bold py-4 px-6 rounded-lg transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed">
+                    ⬇️ Download Audio Data (JSON)
+                </button>
+            </div>
+
+            <div class="mb-6">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="text-xl font-bold text-gray-800">Progress</h3>
+                    <span id="progress-text" class="text-sm text-gray-600">0 / 100</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-6 overflow-hidden">
+                    <div id="progress-bar" class="bg-blue-600 h-6 transition-all duration-300 flex items-center justify-center text-white text-sm font-semibold" style="width: 0%">
+                        0%
+                    </div>
+                </div>
+            </div>
+
+            <div class="mb-6">
+                <h3 class="text-xl font-bold text-gray-800 mb-3">Generation Log</h3>
+                <div id="log-container" class="bg-gray-50 border-2 border-gray-300 rounded-lg max-h-96 overflow-y-auto">
+                    <div class="log-entry log-info">Ready to start generation...</div>
+                </div>
+            </div>
+
+            <div class="bg-blue-50 border-2 border-blue-300 rounded-lg p-4">
+                <h4 class="font-bold text-gray-800 mb-2">💡 Tips</h4>
+                <ul class="text-sm text-gray-700 space-y-1">
+                    <li>• This process may take 2-5 minutes for 100 words</li>
+                    <li>• Keep this tab open until complete</li>
+                    <li>• The JSON file will contain base64-encoded audio</li>
+                    <li>• Estimated cost: ~$0.02 for 100 words (depending on your plan)</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        // The 100 most common words (from commonWords.js)
+        const COMMON_WORDS = [
+            'the', 'be', 'to', 'of', 'and', 'in', 'that', 'have', 'it', 'for',
+            'not', 'on', 'with', 'he', 'as', 'you', 'do', 'at', 'this', 'but',
+            'his', 'by', 'from', 'they', 'we', 'say', 'her', 'she', 'or', 'an',
+            'will', 'my', 'one', 'all', 'would', 'there', 'their', 'what', 'so', 'up',
+            'out', 'if', 'about', 'who', 'get', 'which', 'go', 'me', 'when', 'make',
+            'can', 'like', 'time', 'no', 'just', 'him', 'know', 'take', 'people', 'into',
+            'year', 'your', 'good', 'some', 'could', 'them', 'see', 'other', 'than', 'then',
+            'now', 'look', 'only', 'come', 'its', 'over', 'think', 'also', 'back', 'after',
+            'use', 'two', 'how', 'our', 'work', 'first', 'well', 'way', 'even', 'new',
+            'want', 'because', 'any', 'these', 'give', 'day', 'most', 'us', 'is', 'was'
+        ];
+
+        let generatedData = [];
+        let isGenerating = false;
+
+        const testBtn = document.getElementById('test-btn');
+        const startBtn = document.getElementById('start-btn');
+        const downloadBtn = document.getElementById('download-btn');
+        const progressBar = document.getElementById('progress-bar');
+        const progressText = document.getElementById('progress-text');
+        const logContainer = document.getElementById('log-container');
+        const delayInput = document.getElementById('delay-input');
+
+        function addLog(message, type = 'info') {
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logContainer.appendChild(entry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+
+        function updateProgress(current, total) {
+            const percentage = Math.round((current / total) * 100);
+            progressBar.style.width = `${percentage}%`;
+            progressBar.textContent = `${percentage}%`;
+            progressText.textContent = `${current} / ${total}`;
+        }
+
+        // Configuration: Update this URL to match your PHP server
+        // Examples:
+        // - http://localhost/wordmaster/api/tts.php (if using Apache/Nginx)
+        // - http://localhost:8080/api/tts.php (if using PHP built-in server)
+        const API_ENDPOINT = prompt(
+            'Enter your PHP API endpoint URL:',
+            'http://localhost/wordmaster/api/tts.php'
+        );
+
+        if (!API_ENDPOINT) {
+            alert('API endpoint is required!');
+            throw new Error('No API endpoint provided');
+        }
+
+        async function generateAudio(text) {
+            try {
+                const response = await fetch(API_ENDPOINT, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ text }),
+                });
+
+                // Get raw response text for debugging
+                const rawText = await response.text();
+
+                // Try to parse as JSON
+                let data;
+                try {
+                    data = JSON.parse(rawText);
+                } catch (jsonError) {
+                    console.error('Raw response:', rawText);
+                    throw new Error(`Invalid JSON response. First 200 chars: ${rawText.substring(0, 200)}`);
+                }
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Generation failed');
+                }
+
+                if (!data.success || !data.audio) {
+                    throw new Error('Invalid response structure');
+                }
+
+                return data.audio; // Base64-encoded audio
+
+            } catch (error) {
+                throw error;
+            }
+        }
+
+        async function startGeneration() {
+            if (isGenerating) return;
+
+            isGenerating = true;
+            startBtn.disabled = true;
+            downloadBtn.disabled = true;
+            generatedData = [];
+            logContainer.innerHTML = '';
+
+            const delay = parseInt(delayInput.value);
+
+            addLog(`Starting bulk generation for ${COMMON_WORDS.length} words...`, 'info');
+            addLog(`Delay between requests: ${delay}ms`, 'info');
+
+            let successCount = 0;
+            let failCount = 0;
+
+            for (let i = 0; i < COMMON_WORDS.length; i++) {
+                const word = COMMON_WORDS[i];
+
+                try {
+                    addLog(`Generating audio for "${word}"...`, 'info');
+                    const audioBase64 = await generateAudio(word);
+
+                    generatedData.push({
+                        text: word,
+                        audioBase64: audioBase64
+                    });
+
+                    successCount++;
+                    addLog(`✓ Generated "${word}" (${(audioBase64.length / 1024).toFixed(1)} KB)`, 'success');
+
+                } catch (error) {
+                    failCount++;
+                    addLog(`✗ Failed to generate "${word}": ${error.message}`, 'error');
+
+                    // Store with null audio (will fall back to Web Speech API)
+                    generatedData.push({
+                        text: word,
+                        audioBase64: null
+                    });
+                }
+
+                updateProgress(i + 1, COMMON_WORDS.length);
+
+                // Delay before next request (except for last word)
+                if (i < COMMON_WORDS.length - 1) {
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
+            }
+
+            addLog(`Generation complete! Success: ${successCount}, Failed: ${failCount}`, 'success');
+            addLog(`Click "Download Audio Data" to save the results`, 'info');
+
+            isGenerating = false;
+            startBtn.disabled = false;
+            downloadBtn.disabled = false;
+        }
+
+        function downloadData() {
+            const dataStr = JSON.stringify(generatedData, null, 2);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(dataBlob);
+
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `common-words-audio-${Date.now()}.json`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+
+            addLog('Audio data downloaded!', 'success');
+        }
+
+        async function testAPIConnection() {
+            testBtn.disabled = true;
+            testBtn.textContent = 'Testing...';
+            addLog('Testing API connection...', 'info');
+
+            try {
+                // Test OPTIONS (preflight)
+                addLog(`Testing CORS preflight to: ${API_ENDPOINT}`, 'info');
+                const optionsResponse = await fetch(API_ENDPOINT, {
+                    method: 'OPTIONS',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+
+                if (optionsResponse.ok) {
+                    addLog('✓ CORS preflight successful', 'success');
+                } else {
+                    addLog(`⚠ CORS preflight failed: ${optionsResponse.status}`, 'error');
+                }
+
+                // Test actual POST request
+                addLog('Testing POST request...', 'info');
+                const audio = await generateAudio('test');
+
+                if (audio) {
+                    const sizeKB = (audio.length / 1024).toFixed(1);
+                    addLog(`✓ API test successful! Generated ${sizeKB} KB of audio`, 'success');
+                    testBtn.textContent = '✓ API Connected';
+                    testBtn.classList.add('bg-green-600');
+                } else {
+                    addLog('✗ API returned no audio data', 'error');
+                    testBtn.textContent = '✗ Test Failed';
+                    testBtn.classList.add('bg-red-600');
+                }
+            } catch (error) {
+                addLog(`✗ API test failed: ${error.message}`, 'error');
+                addLog(`Make sure your PHP server is running and accessible at: ${API_ENDPOINT}`, 'error');
+                testBtn.textContent = '✗ Connection Failed';
+                testBtn.classList.add('bg-red-600');
+            } finally {
+                setTimeout(() => {
+                    testBtn.disabled = false;
+                    testBtn.textContent = '🧪 Test API Connection';
+                    testBtn.classList.remove('bg-green-600', 'bg-red-600');
+                }, 3000);
+            }
+        }
+
+        testBtn.addEventListener('click', testAPIConnection);
+        startBtn.addEventListener('click', startGeneration);
+        downloadBtn.addEventListener('click', downloadData);
+    </script>
+</body>
+</html>

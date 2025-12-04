@@ -13,6 +13,7 @@ export class Word {
     this.errors = data.errors || 0; // Total errors made
     this.lastPracticed = data.lastPracticed || null;
     this.createdAt = data.createdAt || new Date().toISOString();
+    this.audioBlob = data.audioBlob || null; // Cached audio from ElevenLabs (Blob)
   }
 
   toJSON() {
@@ -26,7 +27,8 @@ export class Word {
       successes: this.successes,
       errors: this.errors,
       lastPracticed: this.lastPracticed,
-      createdAt: this.createdAt
+      createdAt: this.createdAt,
+      audioBlob: this.audioBlob // Include audioBlob in JSON representation
     };
   }
 

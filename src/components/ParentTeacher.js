@@ -3,6 +3,8 @@ import audio from '../services/audio.js';
 import { COMMON_WORDS } from '../data/commonWords.js';
 import * as googleSync from '../services/googleDriveSync.js';
 import { renderApp } from './App.js';
+import { generateAudio, generateAudioBulk } from '../services/ttsGenerator.js';
+import { loadCommonWordsAudioFromServer, convertAudioDataToBlobs } from '../services/audioLoader.js';
 
 /**
  * Generate a random simple math problem with a 1-digit answer
@@ -524,10 +526,62 @@ function attachChildDetailsListeners(container, child, detailsContainer) {
 
       // Disable button and show loading state
       btn.disabled = true;
-      btn.textContent = 'Loading...';
 
       try {
-        const result = await importCommonWords(child.id, COMMON_WORDS);
+        let wordsWithAudio = [];
+
+        // First, try to load pre-generated audio from server
+        btn.textContent = 'Checking for cached audio...';
+        const cachedAudioData = await loadCommonWordsAudioFromServer();
+
+        if (cachedAudioData && cachedAudioData.length > 0) {
+          // We have pre-generated audio! Use it.
+          btn.textContent = 'Loading pre-generated audio...';
+          console.log(`Found ${cachedAudioData.length} pre-generated audio files`);
+
+          wordsWithAudio = convertAudioDataToBlobs(cachedAudioData);
+          btn.textContent = 'Saving words with audio...';
+        } else {
+          // No cached audio available, ask user what to do
+          const shouldGenerateAudio = confirm(
+            'Generate audio for all words?\n\n' +
+            'YES: Generate high-quality audio (takes 2-5 minutes, uses ElevenLabs API)\n' +
+            'NO: Use device text-to-speech (instant, free)\n\n' +
+            'You can always generate audio later by using the bulk generation tool.'
+          );
+
+          if (shouldGenerateAudio) {
+            // Get existing words to filter out duplicates
+            const existingWords = await getWords(child.id);
+            const existingWordTexts = new Set(existingWords.map(w => w.text.toLowerCase()));
+            const wordsToGenerate = COMMON_WORDS.filter(word =>
+              !existingWordTexts.has(word.toLowerCase())
+            );
+
+            if (wordsToGenerate.length > 0) {
+              btn.textContent = `Generating audio 0/${wordsToGenerate.length}...`;
+
+              // Generate audio for all words
+              const results = await generateAudioBulk(wordsToGenerate, (current, total, text) => {
+                btn.textContent = `Generating audio ${current}/${total}...`;
+              });
+
+              // Convert to format expected by importCommonWords
+              wordsWithAudio = results.map(r => ({
+                text: r.text,
+                audioBlob: r.audioBlob
+              }));
+
+              btn.textContent = 'Saving words...';
+            }
+          }
+        }
+
+        // Import words (with or without audio)
+        const result = await importCommonWords(
+          child.id,
+          wordsWithAudio.length > 0 ? wordsWithAudio : COMMON_WORDS
+        );
 
         // Show success feedback
         audio.playSuccess();
@@ -560,6 +614,7 @@ function attachChildDetailsListeners(container, child, detailsContainer) {
     audio.playClick();
 
     const input = detailsContainer.querySelector('#word-input');
+    const submitBtn = e.target.querySelector('button[type="submit"]');
     const wordText = input.value.trim().toLowerCase();
 
     if (wordText) {
@@ -591,7 +646,21 @@ function attachChildDetailsListeners(container, child, detailsContainer) {
       }
 
       try {
-        await createWord({ text: wordText, childId: child.id });
+        // Disable form while processing
+        input.disabled = true;
+        submitBtn.disabled = true;
+        const originalBtnText = submitBtn.textContent;
+        submitBtn.textContent = 'Generating audio...';
+
+        // Generate audio via ElevenLabs (with fallback)
+        const audioBlob = await generateAudio(wordText);
+
+        // Update button text
+        submitBtn.textContent = 'Saving...';
+
+        // Create word with audio blob (or null if generation failed)
+        await createWord({ text: wordText, childId: child.id }, audioBlob);
+
         input.value = '';
 
         // Reload child details
@@ -608,6 +677,11 @@ function attachChildDetailsListeners(container, child, detailsContainer) {
       } catch (error) {
         console.error('Error adding word:', error);
         alert('Error adding word: ' + error.message);
+
+        // Re-enable form
+        input.disabled = false;
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Add Word';
       }
     }
   });
@@ -653,7 +727,7 @@ function attachChildDetailsListeners(container, child, detailsContainer) {
         await loadChildDetails(container, children[0].id);
       } else {
         // No more children, reload parent interface to show "Add New Child" form
-        await showParentTeacherInterface(container, onBack, null);
+        await renderParentTeacher(container, onBack, null);
       }
     }
   });

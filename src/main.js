@@ -2,6 +2,7 @@ import './styles/main.css';
 import { initDB } from './services/storage.js';
 import { renderApp } from './components/App.js';
 import tts from './services/tts.js';
+import { initializeAllAudio } from './services/audioLoader.js';
 
 // Initialize the application
 async function init() {
@@ -12,6 +13,19 @@ async function init() {
     // Start loading TTS (including HeadTTS) in background immediately
     // Don't await - let it load while user navigates
     tts.init().catch(err => console.error('TTS initialization error:', err));
+
+    // Load pre-generated audio from server (system audio + common words)
+    // This runs in background - app works fine even if it fails
+    initializeAllAudio()
+      .then(results => {
+        if (results.systemAudio) {
+          console.log('✓ System audio (alphabet + prompts) loaded');
+        }
+        if (results.commonWordsAudio) {
+          console.log('✓ Common words audio available');
+        }
+      })
+      .catch(err => console.warn('Audio loading skipped:', err));
 
     // Render the main app
     const app = document.getElementById('app');

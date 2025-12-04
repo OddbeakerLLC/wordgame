@@ -174,7 +174,10 @@ async function teachNewWord(
       <div class="animate-bounce text-5xl sm:text-6xl">📖</div>
     </div>
   `;
-  await sleep(1500);
+
+  // Speak the prompt (uses cached ElevenLabs audio if available)
+  await tts.speakPrompt("Let's learn a new word");
+  await sleep(500);
 
   // Phase 2: Showing - Display and speak the word
   content.innerHTML = `
@@ -186,7 +189,7 @@ async function teachNewWord(
       <p class="text-lg sm:text-xl text-gray-500">Listen carefully...</p>
     </div>
   `;
-  await tts.speakWord(word.text);
+  await tts.speakWord(word.text, word.audioBlob);
   await sleep(1000);
 
   // Phase 3: Spelling - Spell out letter by letter
@@ -276,8 +279,9 @@ async function renderQuizTest(
     </div>
   `;
 
-  // Speak the word as a single phrase (avoids generation delay between parts)
-  await tts.speakWord(`Spell: ${word.text}`);
+  // Speak the word (use cached audio if available)
+  // Note: We speak "Spell: [word]" but audio blob is just the word, so fall back to TTS for the phrase
+  await tts.speakWord(word.text, word.audioBlob);
 
   // Set up practice state
   const practiceState = {
@@ -292,7 +296,7 @@ async function renderQuizTest(
   // Repeat button
   content.querySelector("#repeat-btn").addEventListener("click", async () => {
     audio.playClick();
-    await tts.speakWord(word.text);
+    await tts.speakWord(word.text, word.audioBlob);
   });
 
   attachQuizListeners(

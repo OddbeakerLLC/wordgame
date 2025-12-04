@@ -2,15 +2,16 @@
  * System Audio Service
  * Pre-generated audio for alphabet letters and system prompts
  *
- * Usage:
- * 1. Generate audio using tools/generate-system-audio.html
- * 2. Store the JSON file somewhere accessible
- * 3. Import and use the audio blobs in your app
+ * Supports two loading methods:
+ * 1. MP3 files from public/sounds/ (letter-a.mp3, etc.)
+ * 2. JSON file with base64 encoded audio
  */
 
-// This will be populated after generating system audio
-// For now, it's empty - audio will be generated on demand via ElevenLabs
+// This will be populated after loading system audio
 let systemAudioCache = {};
+
+// Audio URLs for direct MP3 file loading
+let systemAudioUrls = {};
 
 /**
  * Load system audio from generated JSON
@@ -46,12 +47,46 @@ export function loadSystemAudio(audioData) {
 }
 
 /**
+ * Load letter audio from MP3 files in public/sounds/
+ * This is called automatically on app startup
+ */
+export async function loadLetterAudioFromFiles() {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+
+  for (const letter of alphabet) {
+    const fileName = `letter-${letter.toLowerCase()}.mp3`;
+    const url = `/wordmaster/sounds/${fileName}`;
+
+    try {
+      // Test if file exists by attempting to fetch it
+      const response = await fetch(url, { method: 'HEAD' });
+      if (response.ok) {
+        // Store the URL for this letter
+        const key = `letter:${letter}`;
+        systemAudioUrls[key] = url;
+      }
+    } catch (error) {
+      console.warn(`Letter audio file not found: ${fileName}`);
+    }
+  }
+
+  console.log(`Loaded ${Object.keys(systemAudioUrls).length} letter audio files from /sounds/`);
+}
+
+/**
  * Get audio blob for a letter (A-Z)
  * @param {string} letter - Single letter A-Z
- * @returns {Blob|null} - Audio blob or null if not found
+ * @returns {Blob|string|null} - Audio blob, URL, or null if not found
  */
 export function getLetterAudio(letter) {
   const key = `letter:${letter.toUpperCase()}`;
+
+  // First check if we have a URL to an MP3 file
+  if (systemAudioUrls[key]) {
+    return systemAudioUrls[key];
+  }
+
+  // Fallback to cached blob from JSON
   return systemAudioCache[key] || null;
 }
 

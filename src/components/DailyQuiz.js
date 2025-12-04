@@ -279,8 +279,9 @@ async function renderQuizTest(
     </div>
   `;
 
-  // Speak the word (use cached audio if available)
-  // Note: We speak "Spell: [word]" but audio blob is just the word, so fall back to TTS for the phrase
+  // Speak "Spell {word}"
+  await tts.speakPrompt("Spell");
+  await sleep(300); // Small pause between "Spell" and the word
   await tts.speakWord(word.text, word.audioBlob);
 
   // Set up practice state
@@ -296,6 +297,8 @@ async function renderQuizTest(
   // Repeat button
   content.querySelector("#repeat-btn").addEventListener("click", async () => {
     audio.playClick();
+    await tts.speakPrompt("Spell");
+    await sleep(300);
     await tts.speakWord(word.text, word.audioBlob);
   });
 

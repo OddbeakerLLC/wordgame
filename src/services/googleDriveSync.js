@@ -223,12 +223,18 @@ async function mergeCloudData(cloudData) {
     throw new Error("Invalid data format");
   }
 
+  console.log('=== MERGE STARTING ===');
+  console.log(`Cloud has ${cloudData.children.length} children and ${cloudData.words.length} words`);
+
   const localChildren = await getChildren();
+  console.log(`Local has ${localChildren.length} children`);
+
   const childNameMap = new Map(); // child name -> local child ID
 
   // Map local children by name
   for (const child of localChildren) {
     childNameMap.set(child.name.toLowerCase(), child.id);
+    console.log(`Local child: ${child.name} (ID: ${child.id})`);
   }
 
   // Process cloud children - add missing ones
@@ -239,18 +245,27 @@ async function mergeCloudData(cloudData) {
       delete cloudChild.id;
       const newId = await db.children.add(cloudChild);
       childNameMap.set(childName, newId);
-      console.log(`Added new child from cloud: ${cloudChild.name}`);
+      console.log(`✅ Added new child from cloud: ${cloudChild.name}`);
     }
   }
+
+  let wordsUpdated = 0;
+  let wordsAdded = 0;
 
   // Process cloud words
   for (const cloudWord of cloudData.words) {
     // Find the corresponding child
     const cloudChildData = cloudData.children.find(c => c.id === cloudWord.childId);
-    if (!cloudChildData) continue;
+    if (!cloudChildData) {
+      console.log(`⚠️ Skipping word "${cloudWord.text}" - no matching cloud child`);
+      continue;
+    }
 
     const localChildId = childNameMap.get(cloudChildData.name.toLowerCase());
-    if (!localChildId) continue;
+    if (!localChildId) {
+      console.log(`⚠️ Skipping word "${cloudWord.text}" - no local child for ${cloudChildData.name}`);
+      continue;
+    }
 
     // Find matching local word by text and childId
     const localWords = await getWords(localChildId);
@@ -263,7 +278,7 @@ async function mergeCloudData(cloudData) {
       // Always take cloud's drilled status if it's true (word was learned on another device)
       if (cloudWord.drilled && !localWord.drilled) {
         updates.drilled = true;
-        console.log(`Marking word as drilled from cloud: ${cloudWord.text}`);
+        console.log(`✅ Marking word as drilled from cloud: "${cloudWord.text}"`);
       }
 
       // Take cloud's stats if they show more practice
@@ -271,7 +286,7 @@ async function mergeCloudData(cloudData) {
         updates.attempts = cloudWord.attempts;
         updates.successes = cloudWord.successes;
         updates.errors = cloudWord.errors;
-        console.log(`Updating stats from cloud for: ${cloudWord.text}`);
+        console.log(`✅ Updating stats from cloud for: "${cloudWord.text}" (attempts: ${localWord.attempts} -> ${cloudWord.attempts})`);
       }
 
       // Update lastPracticed if cloud is more recent
@@ -284,6 +299,7 @@ async function mergeCloudData(cloudData) {
       // Apply updates if any
       if (Object.keys(updates).length > 0) {
         await db.words.update(localWord.id, updates);
+        wordsUpdated++;
       }
     } else {
       // New word from cloud - add it
@@ -299,11 +315,12 @@ async function mergeCloudData(cloudData) {
         createdAt: cloudWord.createdAt
       };
       await db.words.add(newWord);
-      console.log(`Added new word from cloud: ${cloudWord.text}`);
+      wordsAdded++;
+      console.log(`✅ Added new word from cloud: "${cloudWord.text}" (drilled: ${cloudWord.drilled})`);
     }
   }
 
-  console.log('Merged cloud data successfully');
+  console.log(`=== MERGE COMPLETE: ${wordsUpdated} words updated, ${wordsAdded} words added ===`);
 }
 
 /**

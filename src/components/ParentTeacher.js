@@ -764,10 +764,20 @@ async function setupCloudSync(container) {
       await googleSync.syncToCloud();
       audio.playSuccess();
       syncBtn.textContent = 'Synced!';
-      setTimeout(() => {
-        syncBtn.textContent = originalText;
-        syncBtn.disabled = false;
-      }, 1500);
+
+      // Reload the parent interface to show merged data
+      setTimeout(async () => {
+        const children = await getChildren();
+        if (children.length > 0) {
+          // Reload with current child or first child
+          const childIdToLoad = state.lastSelectedChildId && children.some(c => c.id === state.lastSelectedChildId)
+            ? state.lastSelectedChildId
+            : children[0].id;
+          await showParentTeacherInterface(container, onBack, childIdToLoad);
+        } else {
+          await showParentTeacherInterface(container, onBack, null);
+        }
+      }, 1000);
     } catch (error) {
       console.error('Error syncing:', error);
       audio.playBuzz();

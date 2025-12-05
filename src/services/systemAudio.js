@@ -8,9 +8,10 @@
  */
 
 // This will be populated after loading system audio
+// All audio is stored as Blobs in memory for instant playback
 let systemAudioCache = {};
 
-// Audio URLs for direct MP3 file loading
+// Pre-created Object URLs for audio blobs (created once, reused forever)
 let systemAudioUrls = {};
 
 /**
@@ -48,46 +49,54 @@ export function loadSystemAudio(audioData) {
 
 /**
  * Load letter audio from MP3 files in public/sounds/
+ * Pre-loads and caches all MP3 files as Blobs in memory for instant playback
+ * Creates persistent ObjectURLs for each blob to avoid corruption
  * This is called automatically on app startup
  */
 export async function loadLetterAudioFromFiles() {
   const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+  let loaded = 0;
 
-  for (const letter of alphabet) {
-    const fileName = `letter-${letter.toLowerCase()}.mp3`;
-    const url = `/wordmaster/sounds/${fileName}`;
+  // Load all letter audio files in parallel for faster startup
+  await Promise.all(
+    alphabet.map(async (letter) => {
+      const fileName = `letter-${letter.toLowerCase()}.mp3`;
+      const url = `/wordmaster/sounds/${fileName}`;
 
-    try {
-      // Test if file exists by attempting to fetch it
-      const response = await fetch(url, { method: 'HEAD' });
-      if (response.ok) {
-        // Store the URL for this letter
+      try {
+        const response = await fetch(url);
+        if (!response.ok) {
+          console.warn(`Letter audio file not found: ${fileName}`);
+          return;
+        }
+
+        // Convert to Blob and cache in memory
+        const blob = await response.blob();
         const key = `letter:${letter}`;
-        systemAudioUrls[key] = url;
-      }
-    } catch (error) {
-      console.warn(`Letter audio file not found: ${fileName}`);
-    }
-  }
+        systemAudioCache[key] = blob;
 
-  console.log(`Loaded ${Object.keys(systemAudioUrls).length} letter audio files from /sounds/`);
+        // Create persistent ObjectURL (never revoked, reused for entire session)
+        systemAudioUrls[key] = URL.createObjectURL(blob);
+
+        loaded++;
+      } catch (error) {
+        console.warn(`Failed to load letter audio for "${letter}":`, error);
+      }
+    })
+  );
+
+  console.log(`Loaded ${loaded} letter audio files as Blobs (pre-cached in memory with persistent URLs)`);
 }
 
 /**
- * Get audio blob for a letter (A-Z)
+ * Get audio URL for a letter (A-Z)
+ * Returns persistent ObjectURL (created once, never revoked)
  * @param {string} letter - Single letter A-Z
- * @returns {Blob|string|null} - Audio blob, URL, or null if not found
+ * @returns {string|null} - Audio URL or null if not found
  */
 export function getLetterAudio(letter) {
   const key = `letter:${letter.toUpperCase()}`;
-
-  // First check if we have a URL to an MP3 file
-  if (systemAudioUrls[key]) {
-    return systemAudioUrls[key];
-  }
-
-  // Fallback to cached blob from JSON
-  return systemAudioCache[key] || null;
+  return systemAudioUrls[key] || null;
 }
 
 /**

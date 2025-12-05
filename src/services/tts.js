@@ -243,36 +243,18 @@ class TTSService {
    * Speak a single letter (with optional cached audio)
    */
   async speakLetter(letter) {
-    // Try to use cached audio first (can be URL or Blob)
-    const audioSource = getLetterAudio(letter);
-    if (audioSource) {
-      console.log(`Using cached audio for letter: ${letter}`);
+    // Try to use cached audio URL (persistent ObjectURL, pre-created on startup)
+    const audioUrl = getLetterAudio(letter);
+    if (audioUrl) {
       try {
-        let audioUrl;
-        let shouldRevoke = false;
-
-        // Handle both URL strings and Blob objects
-        if (typeof audioSource === 'string') {
-          // It's a URL to an MP3 file
-          audioUrl = audioSource;
-        } else if (audioSource instanceof Blob) {
-          // It's a Blob from JSON data
-          audioUrl = URL.createObjectURL(audioSource);
-          shouldRevoke = true;
-        } else {
-          throw new Error('Invalid audio source type');
-        }
-
         const audio = new Audio(audioUrl);
 
         await new Promise((resolve, reject) => {
           audio.onended = () => {
-            if (shouldRevoke) URL.revokeObjectURL(audioUrl);
             resolve();
           };
           audio.onerror = (error) => {
             console.warn(`Error playing cached letter audio for "${letter}", falling back to TTS:`, error);
-            if (shouldRevoke) URL.revokeObjectURL(audioUrl);
             reject(error);
           };
           audio.play().catch(reject);

@@ -4,7 +4,9 @@
   "description": "Word Master Challenge - A progressive web app for children to master sight-reading and spelling through interactive drills and spaced repetition",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "npm run dev:vite & npm run dev:php",
+    "dev:vite": "vite",
+    "dev:php": "cd api && php -S localhost:8080",
     "build": "vite build && cp -r dist/* ../oddbeaker.com/wordmaster/",
     "preview": "vite preview"
   },

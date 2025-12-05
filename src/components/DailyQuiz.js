@@ -9,6 +9,7 @@ import tts from "../services/tts.js";
 import audio from "../services/audio.js";
 import { Fireworks } from 'fireworks-js';
 import * as googleSync from '../services/googleDriveSync.js';
+import { backfillWordAudio } from '../services/audioLoader.js';
 
 /**
  * Helper function for delays
@@ -39,7 +40,12 @@ async function syncAfterQuiz() {
  */
 export async function renderDailyQuiz(container, child, onComplete) {
   // Get all words for this child
-  const allWords = await getWords(child.id);
+  let allWords = await getWords(child.id);
+
+  // Backfill audio for words that don't have audioBlob
+  // This ensures we use ElevenLabs audio from common-words-audio.json
+  // or generates it on-demand for custom words
+  allWords = await backfillWordAudio(allWords);
 
   if (allWords.length === 0) {
     // No words to quiz

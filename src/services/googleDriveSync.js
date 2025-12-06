@@ -167,11 +167,15 @@ async function exportAllData() {
     allWords.push(...words);
   }
 
+  // Get all deletion records
+  const deletedItems = await db.deletedItems.toArray();
+
   return {
-    version: 1,
+    version: 2, // Increment version for deletion tracking
     lastSync: new Date().toISOString(),
     children: children.map((c) => c.toJSON()),
     words: allWords.map((w) => w.toJSON()),
+    deletedItems: deletedItems, // Include deletion tracking
   };
 }
 
@@ -179,13 +183,14 @@ async function exportAllData() {
  * Import data into IndexedDB (FULL REPLACE - used for initial sync)
  */
 async function importAllData(data) {
-  if (!data || data.version !== 1) {
+  if (!data || (data.version !== 1 && data.version !== 2)) {
     throw new Error("Invalid data format");
   }
 
   // Clear existing data
   await db.children.clear();
   await db.words.clear();
+  await db.deletedItems.clear();
 
   // Import children
   const childIdMap = new Map(); // Old ID -> New ID
@@ -207,6 +212,14 @@ async function importAllData(data) {
     }
   }
 
+  // Import deletion records (if present in v2 data)
+  if (data.version === 2 && data.deletedItems) {
+    for (const deletedItem of data.deletedItems) {
+      delete deletedItem.id; // Let DB assign new ID
+      await db.deletedItems.add(deletedItem);
+    }
+  }
+
   console.log(
     `Imported ${data.children.length} children and ${data.words.length} words`
   );
@@ -217,14 +230,67 @@ async function importAllData(data) {
  * - Match children and words by name/text
  * - Update drilled status, attempts, successes, errors from cloud if cloud has more data
  * - Keep local position (queue order)
+ * - Apply deletions from cloud
  */
 async function mergeCloudData(cloudData) {
-  if (!cloudData || cloudData.version !== 1) {
+  if (!cloudData || (cloudData.version !== 1 && cloudData.version !== 2)) {
     throw new Error("Invalid data format");
   }
 
   console.log('=== MERGE STARTING ===');
   console.log(`Cloud has ${cloudData.children.length} children and ${cloudData.words.length} words`);
+
+  // STEP 1: Apply deletions from cloud (if v2 data)
+  if (cloudData.version === 2 && cloudData.deletedItems) {
+    console.log(`Applying ${cloudData.deletedItems.length} deletions from cloud...`);
+    for (const deletedItem of cloudData.deletedItems) {
+      if (deletedItem.itemType === 'child') {
+        // Find and delete child by name
+        const localChildren = await getChildren();
+        const childToDelete = localChildren.find(c => c.name.toLowerCase() === deletedItem.itemKey);
+        if (childToDelete) {
+          console.log(`🗑️ Deleting child from cloud deletion: ${childToDelete.name}`);
+          // Delete without tracking (to avoid re-adding to deletedItems)
+          const words = await getWords(childToDelete.id);
+          for (const word of words) {
+            await db.words.delete(word.id);
+          }
+          await db.children.delete(childToDelete.id);
+        }
+      } else if (deletedItem.itemType === 'word') {
+        // Parse child:word format
+        const [childName, wordText] = deletedItem.itemKey.split(':');
+        const localChildren = await getChildren();
+        const child = localChildren.find(c => c.name.toLowerCase() === childName);
+        if (child) {
+          const words = await getWords(child.id);
+          const wordToDelete = words.find(w => w.text.toLowerCase() === wordText);
+          if (wordToDelete) {
+            console.log(`🗑️ Deleting word from cloud deletion: "${wordToDelete.text}" (child: ${child.name})`);
+            // Delete without tracking
+            await db.words.delete(wordToDelete.id);
+          }
+        }
+      }
+    }
+
+    // Merge cloud deletions into local deletions
+    for (const deletedItem of cloudData.deletedItems) {
+      // Check if we already have this deletion record
+      const existing = await db.deletedItems
+        .where('itemKey')
+        .equals(deletedItem.itemKey)
+        .and(item => item.itemType === deletedItem.itemType)
+        .first();
+
+      if (!existing) {
+        delete deletedItem.id;
+        await db.deletedItems.add(deletedItem);
+      }
+    }
+  }
+
+  // STEP 2: Merge children and words
 
   const localChildren = await getChildren();
   console.log(`Local has ${localChildren.length} children`);
@@ -414,6 +480,27 @@ async function downloadFromGoogleDrive() {
 }
 
 /**
+ * Clean up old deletion records (older than 30 days)
+ * This prevents the deletedItems table from growing indefinitely
+ */
+async function cleanupOldDeletions() {
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+  const oldDeletions = await db.deletedItems
+    .where('deletedAt')
+    .below(thirtyDaysAgo.toISOString())
+    .toArray();
+
+  if (oldDeletions.length > 0) {
+    console.log(`Cleaning up ${oldDeletions.length} old deletion records...`);
+    for (const deletion of oldDeletions) {
+      await db.deletedItems.delete(deletion.id);
+    }
+  }
+}
+
+/**
  * Sync to cloud (download first, then upload merged data)
  */
 export async function syncToCloud() {
@@ -431,6 +518,9 @@ export async function syncToCloud() {
       console.log("Merging cloud data before uploading...");
       await mergeCloudData(cloudData);
     }
+
+    // Clean up old deletion records
+    await cleanupOldDeletions();
 
     // Now export and upload the merged data
     const data = await exportAllData();

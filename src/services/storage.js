@@ -21,6 +21,15 @@ db.version(2).stores({
   console.log('Database upgraded to version 2 (audioBlob support added)');
 });
 
+// Version 3: Add deletion tracking for sync
+db.version(3).stores({
+  children: '++id, name, createdAt',
+  words: '++id, childId, position, drilled, createdAt, [childId+position]',
+  deletedItems: '++id, itemType, itemKey, deletedAt' // Track deletions for sync
+}).upgrade(tx => {
+  console.log('Database upgraded to version 3 (deletion tracking added)');
+});
+
 /**
  * Initialize the database
  */
@@ -65,10 +74,25 @@ export async function updateChild(id, updates) {
 }
 
 export async function deleteChild(id) {
+  // Get child data before deletion for tracking
+  const child = await getChild(id);
+  if (!child) return;
+
   // Delete all words for this child
-  await db.words.where('childId').equals(id).delete();
+  const words = await getWords(id);
+  for (const word of words) {
+    await deleteWord(word.id);
+  }
+
   // Delete the child
   await db.children.delete(id);
+
+  // Track deletion for sync (use child name as unique key)
+  await db.deletedItems.add({
+    itemType: 'child',
+    itemKey: child.name.toLowerCase(),
+    deletedAt: new Date().toISOString()
+  });
 }
 
 /**
@@ -124,6 +148,10 @@ export async function deleteWord(id) {
   const word = await getWord(id);
   if (!word) return;
 
+  // Get child for tracking
+  const child = await getChild(word.childId);
+  if (!child) return;
+
   // Shift all words after this one forward by 1
   const wordsAfter = await db.words
     .where('childId')
@@ -136,6 +164,13 @@ export async function deleteWord(id) {
   }
 
   await db.words.delete(id);
+
+  // Track deletion for sync (use child name + word text as unique key)
+  await db.deletedItems.add({
+    itemType: 'word',
+    itemKey: `${child.name.toLowerCase()}:${word.text.toLowerCase()}`,
+    deletedAt: new Date().toISOString()
+  });
 }
 
 /**

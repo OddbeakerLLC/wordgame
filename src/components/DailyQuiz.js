@@ -582,7 +582,8 @@ async function completeQuizWord(
     // Track this completed word
     state.completedWords.push({
       word: word.text,
-      firstTry: !isRetry && !hadErrors // Perfect on first attempt
+      firstTry: !isRetry && !hadErrors, // Perfect on first attempt
+      audioBlob: word.audioBlob // Store audio for playback at end
     });
   }
 
@@ -613,7 +614,7 @@ function renderComplete(container, state, onComplete) {
  */
 function renderPerfectQuiz(container, state, onComplete) {
   const wordList = state.completedWords
-    .map(w => `<span class="inline-block px-3 py-2 bg-yellow-100 text-yellow-900 rounded-lg font-bold text-lg sm:text-xl m-1">${escapeHtml(w.word.toUpperCase())}</span>`)
+    .map(w => `<button class="word-button inline-block px-3 py-2 bg-yellow-100 text-yellow-900 rounded-lg font-bold text-lg sm:text-xl m-1 hover:bg-yellow-200 active:scale-95 transition-all cursor-pointer" data-word="${escapeHtml(w.word)}">${escapeHtml(w.word.toUpperCase())}</button>`)
     .join('');
 
   container.innerHTML = `
@@ -638,7 +639,7 @@ function renderPerfectQuiz(container, state, onComplete) {
             <p class="text-lg sm:text-xl text-gray-700 font-semibold mb-4">
               🌟 You mastered these words: 🌟
             </p>
-            <div class="flex flex-wrap justify-center max-w-3xl mx-auto">
+            <div id="word-list" class="flex flex-wrap justify-center max-w-3xl mx-auto">
               ${wordList}
             </div>
           </div>
@@ -657,6 +658,17 @@ function renderPerfectQuiz(container, state, onComplete) {
 
   // Play huge thundering applause for perfect score!
   audio.playHugeApplause();
+
+  // Add click handlers to word buttons
+  const wordButtons = container.querySelectorAll('.word-button');
+  wordButtons.forEach((btn, index) => {
+    btn.addEventListener('click', async () => {
+      audio.playClick();
+      const word = btn.dataset.word;
+      const audioBlob = state.completedWords[index]?.audioBlob;
+      await tts.speakWord(word, audioBlob);
+    });
+  });
 
   // Initialize fireworks
   const fireworksContainer = container.querySelector("#fireworks-container");
@@ -703,7 +715,7 @@ function renderPerfectQuiz(container, state, onComplete) {
 function renderRegularCompletion(container, state, onComplete) {
   const perfectWords = state.completedWords.filter(w => w.firstTry).length;
   const wordList = state.completedWords
-    .map(w => `<span class="inline-block px-3 py-2 ${w.firstTry ? 'bg-green-100 text-green-900' : 'bg-blue-100 text-blue-900'} rounded-lg font-semibold text-base sm:text-lg m-1">${escapeHtml(w.word)}</span>`)
+    .map(w => `<button class="word-button inline-block px-3 py-2 ${w.firstTry ? 'bg-green-100 text-green-900 hover:bg-green-200' : 'bg-blue-100 text-blue-900 hover:bg-blue-200'} rounded-lg font-semibold text-base sm:text-lg m-1 active:scale-95 transition-all cursor-pointer" data-word="${escapeHtml(w.word)}">${escapeHtml(w.word)}</button>`)
     .join('');
 
   container.innerHTML = `
@@ -731,7 +743,7 @@ function renderRegularCompletion(container, state, onComplete) {
             <p class="text-base sm:text-lg text-gray-600 mb-3">
               Words you practiced:
             </p>
-            <div class="flex flex-wrap justify-center max-w-3xl mx-auto">
+            <div id="word-list" class="flex flex-wrap justify-center max-w-3xl mx-auto">
               ${wordList}
             </div>
             <p class="text-sm sm:text-base text-gray-500 mt-3">
@@ -749,6 +761,17 @@ function renderRegularCompletion(container, state, onComplete) {
   `;
 
   audio.playApplause();
+
+  // Add click handlers to word buttons
+  const wordButtons = container.querySelectorAll('.word-button');
+  wordButtons.forEach((btn, index) => {
+    btn.addEventListener('click', async () => {
+      audio.playClick();
+      const word = btn.dataset.word;
+      const audioBlob = state.completedWords[index]?.audioBlob;
+      await tts.speakWord(word, audioBlob);
+    });
+  });
 
   container.querySelector("#done-btn").addEventListener("click", async () => {
     audio.playClick();

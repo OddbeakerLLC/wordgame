@@ -196,17 +196,18 @@ export async function moveWordToBack(wordId) {
   if (!word) return;
 
   const allWords = await getWords(word.childId);
-  const maxPosition = allWords.length - 1;
+  const maxPosition = Math.max(...allWords.map(w => w.position));
 
-  // Shift all words between current position and end forward by 1
-  for (const w of allWords) {
-    if (w.position > word.position) {
-      await db.words.update(w.id, { position: w.position - 1 });
+  // Move this word beyond current max position
+  await db.words.update(wordId, { position: maxPosition + 1 });
+
+  // Normalize all positions to remove gaps (0, 1, 2, ...)
+  const updatedWords = await getWords(word.childId);
+  for (let i = 0; i < updatedWords.length; i++) {
+    if (updatedWords[i].position !== i) {
+      await db.words.update(updatedWords[i].id, { position: i });
     }
   }
-
-  // Move this word to the back
-  await db.words.update(wordId, { position: maxPosition });
 }
 
 /**

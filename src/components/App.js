@@ -1,4 +1,4 @@
-import { getChildren, sortWordQueue } from '../services/storage.js';
+import { getChildren } from '../services/storage.js';
 import { renderChildSelection } from './ChildSelection.js';
 import { renderMainMenu } from './MainMenu.js';
 import { renderParentTeacher } from './ParentTeacher.js';
@@ -138,9 +138,9 @@ async function onChildSelected(child) {
   state.currentChild = child;
   state.lastSelectedChildId = child.id; // Store ID separately
 
-  // Sort the word queue on first selection
-  // This prioritizes words with high error rates and shorter words
-  await sortWordQueue(child.id);
+  // Note: We no longer sort the word queue here because:
+  // 1. The quiz manages positions via moveWordToBack/moveWordToSecond (spaced repetition)
+  // 2. Sorting on every selection was undoing quiz progress
 
   switchView('main-menu');
 }

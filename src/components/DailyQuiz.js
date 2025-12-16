@@ -3,6 +3,7 @@ import {
   recordAttempt,
   moveWordToBack,
   moveWordToSecond,
+  moveWordToPosition,
   markWordDrilled,
 } from "../services/storage.js";
 import tts from "../services/tts.js";
@@ -79,7 +80,7 @@ export async function renderDailyQuiz(container, child, onComplete) {
     completedCount: 0,
     completedWords: [], // Track completed words {word: string, firstTry: boolean}
     totalErrors: 0, // Track total errors across entire quiz
-    attemptedWords: new Set(), // Track which words have been attempted (for retry detection)
+    missedWords: new Set(), // Track word IDs that have been missed during this quiz session
   };
 
   render(container, child, state, onComplete);
@@ -523,10 +524,7 @@ async function completeQuizWord(
   onComplete
 ) {
   const hadErrors = practiceState.errorCount > 0;
-  const isRetry = state.attemptedWords.has(word.text);
-
-  // Mark this word as attempted
-  state.attemptedWords.add(word.text);
+  const wasPreviouslyMissed = state.missedWords.has(word.id);
 
   // Mark word as drilled if it's a new word (this happens after first successful spell)
   if (!word.drilled) {
@@ -539,10 +537,16 @@ async function completeQuizWord(
 
   // Update queue position based on performance
   if (hadErrors) {
-    // Move to position 2 (gets another try soon)
+    // Wrong answer: move to position 2 (gets another try soon)
+    // Also track this word as missed for this session
+    state.missedWords.add(word.id);
     await moveWordToSecond(word.id);
+  } else if (wasPreviouslyMissed) {
+    // Correct on 2nd+ attempt: move to position N (quiz length)
+    // Keep in rotation until they can get it right on first try
+    await moveWordToPosition(word.id, state.quizLength);
   } else {
-    // Move to back of queue (mastered!)
+    // Correct on 1st attempt: move to back of queue (mastered!)
     await moveWordToBack(word.id);
   }
 
@@ -582,7 +586,7 @@ async function completeQuizWord(
     // Track this completed word
     state.completedWords.push({
       word: word.text,
-      firstTry: !isRetry && !hadErrors, // Perfect on first attempt
+      firstTry: !wasPreviouslyMissed, // Perfect on first attempt (never missed this session)
       audioBlob: word.audioBlob // Store audio for playback at end
     });
   }

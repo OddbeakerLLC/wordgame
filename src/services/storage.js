@@ -214,27 +214,46 @@ export async function moveWordToBack(wordId) {
  * Move word to position 1 (second in queue)
  */
 export async function moveWordToSecond(wordId) {
+  await moveWordToPosition(wordId, 1);
+}
+
+/**
+ * Move word to a specific position in the queue
+ * @param {number} wordId - Word ID
+ * @param {number} targetPosition - Target position (0-indexed)
+ */
+export async function moveWordToPosition(wordId, targetPosition) {
   const word = await getWord(wordId);
   if (!word) return;
 
   const allWords = await getWords(word.childId);
+  const currentPosition = word.position;
 
-  // Shift all words between current position and position 1
-  if (word.position > 1) {
+  // Clamp target position to valid range
+  const maxPosition = allWords.length - 1;
+  targetPosition = Math.max(0, Math.min(targetPosition, maxPosition));
+
+  if (currentPosition === targetPosition) return;
+
+  if (currentPosition < targetPosition) {
+    // Moving word backward (higher position)
+    // Shift words between current and target forward by 1
     for (const w of allWords) {
-      if (w.position >= 1 && w.position < word.position) {
+      if (w.position > currentPosition && w.position <= targetPosition) {
+        await db.words.update(w.id, { position: w.position - 1 });
+      }
+    }
+  } else {
+    // Moving word forward (lower position)
+    // Shift words between target and current backward by 1
+    for (const w of allWords) {
+      if (w.position >= targetPosition && w.position < currentPosition) {
         await db.words.update(w.id, { position: w.position + 1 });
       }
     }
-  } else if (word.position === 0) {
-    // If moving from position 0 to 1, shift position 1 to 0
-    const wordAtOne = allWords.find(w => w.position === 1);
-    if (wordAtOne) {
-      await db.words.update(wordAtOne.id, { position: 0 });
-    }
   }
 
-  await db.words.update(wordId, { position: 1 });
+  await db.words.update(wordId, { position: targetPosition });
 }
 
 /**

@@ -3,7 +3,8 @@ import audio from '../services/audio.js';
 import { COMMON_WORDS } from '../data/commonWords.js';
 import * as googleSync from '../services/googleDriveSync.js';
 import { renderApp } from './App.js';
-import { generateAudio, generateAudioBulk } from '../services/ttsGenerator.js';
+import { generateAudioBulk } from '../services/ttsGenerator.js';
+import { getAudioForWord } from '../services/audioLoader.js';
 import { loadCommonWordsAudioFromServer, convertAudioDataToBlobs } from '../services/audioLoader.js';
 
 /**
@@ -652,8 +653,8 @@ function attachChildDetailsListeners(container, child, detailsContainer) {
         const originalBtnText = submitBtn.textContent;
         submitBtn.textContent = 'Generating audio...';
 
-        // Generate audio via ElevenLabs (with fallback)
-        const audioBlob = await generateAudio(wordText);
+        // Get audio (checks cache first, then falls back to ElevenLabs)
+        const audioBlob = await getAudioForWord(wordText);
 
         // Update button text
         submitBtn.textContent = 'Saving...';

@@ -178,6 +178,35 @@ export async function backfillWordAudio(words) {
 }
 
 /**
+ * Get audio for a word, checking cache first then falling back to ElevenLabs
+ * @param {string} text - Word text
+ * @returns {Promise<Blob|null>} - Audio blob or null if not available
+ */
+export async function getAudioForWord(text) {
+  const normalizedText = text.toLowerCase();
+
+  // First check the common words cache
+  const cachedBlob = commonWordsAudioCache.get(normalizedText);
+  if (cachedBlob) {
+    console.log(`Using cached audio for: ${text}`);
+    return cachedBlob;
+  }
+
+  // Not in cache - generate via ElevenLabs
+  console.log(`Generating audio via ElevenLabs for: ${text}`);
+  const { generateAudio } = await import('./ttsGenerator.js');
+  const audioBlob = await generateAudio(text);
+
+  if (audioBlob) {
+    console.log(`✓ Generated audio for: ${text}`);
+  } else {
+    console.warn(`✗ Failed to generate audio for: ${text}`);
+  }
+
+  return audioBlob;
+}
+
+/**
  * Generate audio for words that don't have it
  * @param {Array} words - Array of word objects that need audio
  */

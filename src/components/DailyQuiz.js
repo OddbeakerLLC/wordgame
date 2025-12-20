@@ -18,19 +18,37 @@ import { backfillWordAudio } from '../services/audioLoader.js';
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
- * Helper function to sync quiz data to Google Drive
+ * Helper function to sync child data TO cloud after quiz
  */
-async function syncAfterQuiz() {
+async function syncChildAfterQuiz(childId) {
   // Only sync if signed in
   if (!googleSync.isSignedIn()) {
     return;
   }
 
   try {
-    await googleSync.syncToCloud();
-    console.log('Quiz data synced to Google Drive');
+    await googleSync.syncChildToCloud(childId);
+    console.log('Child quiz data synced to Google Drive');
   } catch (error) {
-    console.error('Error syncing after quiz:', error);
+    console.error('Error syncing child after quiz:', error);
+    // Don't show error to user - sync failure shouldn't interrupt their flow
+  }
+}
+
+/**
+ * Helper function to sync child data FROM cloud before quiz
+ */
+async function syncChildBeforeQuiz(childId) {
+  // Only sync if signed in
+  if (!googleSync.isSignedIn()) {
+    return;
+  }
+
+  try {
+    await googleSync.syncChildFromCloud(childId);
+    console.log('Child data synced from Google Drive before quiz');
+  } catch (error) {
+    console.error('Error syncing child before quiz:', error);
     // Don't show error to user - sync failure shouldn't interrupt their flow
   }
 }
@@ -40,7 +58,10 @@ async function syncAfterQuiz() {
  * Shows ALL words (both new and learned), teaches new words, then tests them
  */
 export async function renderDailyQuiz(container, child, onComplete) {
-  // Get all words for this child
+  // Pull this child's data from cloud before starting (silent, non-blocking UI)
+  await syncChildBeforeQuiz(child.id);
+
+  // Get all words for this child (now includes any updates from cloud)
   let allWords = await getWords(child.id);
 
   // Backfill audio for words that don't have audioBlob
@@ -75,6 +96,7 @@ export async function renderDailyQuiz(container, child, onComplete) {
   const quizQueue = allWords.slice(0, child.quizLength);
 
   const state = {
+    childId: child.id, // Store child ID for sync
     quizQueue: quizQueue, // Words for this quiz session
     quizLength: child.quizLength,
     completedCount: 0,
@@ -701,13 +723,16 @@ function renderPerfectQuiz(container, state, onComplete) {
 
   fireworks.start();
 
+  // Store child.id for use in the event listener
+  const childId = state.childId;
+
   container.querySelector("#done-btn").addEventListener("click", async () => {
     audio.playClick();
     audio.stop('huge-applause');
     fireworks.stop();
 
-    // Sync to cloud if connected
-    await syncAfterQuiz();
+    // Sync this child's data to cloud
+    await syncChildAfterQuiz(childId);
 
     onComplete();
   });
@@ -777,12 +802,15 @@ function renderRegularCompletion(container, state, onComplete) {
     });
   });
 
+  // Store child.id for use in the event listener
+  const childId = state.childId;
+
   container.querySelector("#done-btn").addEventListener("click", async () => {
     audio.playClick();
     audio.stop('applause');
 
-    // Sync to cloud if connected
-    await syncAfterQuiz();
+    // Sync this child's data to cloud
+    await syncChildAfterQuiz(childId);
 
     onComplete();
   });

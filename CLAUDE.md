@@ -62,29 +62,31 @@ Word Master Challenge is a Progressive Web App (PWA) for teaching children spell
 - **Drilled flag**: Words start undrilled, marked drilled after completing Word Drill
 - **Quiz eligibility**: Only drilled words appear in quizzes
 
-### 3. Word Drill Mode (`WordDrill.js`)
+### 3. Unified Quiz/Drill Mode (`DailyQuiz.js`)
 
-**Purpose**: Teach new (undrilled) words through multi-phase learning
+**Purpose**: Unified learning and testing - teaches new words AND tests learned words
 
-**Phases**:
+The app uses a single component (`DailyQuiz.js`) that handles both:
+- **New (undrilled) words**: Automatically teaches them first (intro → showing → spelling → practice)
+- **Drilled words**: Tests them directly
+
+**Teaching Phases** (for undrilled words):
 
 1. **Intro**: "Let's learn a new word!" (1.5s auto-advance)
 2. **Showing**: Display word + speak it (1s delay)
 3. **Spelling**: Show letters, speak each one by one
 4. **Practice**: Child spells the word
-   - Correct letter: Highlight green, speak letter, advance
-   - Wrong letter: Show correct letter in red, speak it, wait 1.5s, clear and restart
-5. **Complete**: Mark word as drilled, move to next or finish
 
 **Key Features**:
 
 - Adaptive input: Generates letter buttons (correct letters + 3-5 distractors) for on-screen mode
 - Error handling: Shows correct letter, speaks it, then clears all boxes
 - Keyboard listener cleanup on exit (important!)
+- **Per-child sync**: Pulls data from cloud before quiz, pushes after quiz
 
-### 4. Daily Quiz Mode (`DailyQuiz.js`)
+### 4. Quiz Queue Logic
 
-**Purpose**: Test drilled words with spaced repetition
+**Purpose**: Spaced repetition for learning
 
 **Queue Logic** (IMPORTANT - uses simple array operations):
 
@@ -198,6 +200,60 @@ tts.speakLetter(letter); // Spell out letter
 - [public/sw.js](public/sw.js) - Auto-generated service worker
 
 **Offline Support**: Everything works offline after first load (IndexedDB + cached assets)
+
+### 9. Google Drive Sync (`googleDriveSync.js`)
+
+**Purpose**: Sync data across devices using Google Drive's app data folder
+
+**Sync Strategy** (per-child):
+
+```
+Quiz Start
+    ↓
+[If signed in] syncChildFromCloud(childId) - Pull this child's data
+    ↓
+Quiz happens (words get drilled, stats updated)
+    ↓
+[If signed in] syncChildToCloud(childId) - Push this child's data
+    ↓
+Done
+```
+
+**Key Methods**:
+
+```javascript
+// Per-child sync (used during quizzes)
+syncChildFromCloud(childId); // Download and merge this child's words
+syncChildToCloud(childId);   // Upload this child's data to cloud
+
+// Full sync (used on app launch, parent mode)
+syncFromCloud();  // Download all data from cloud
+syncToCloud();    // Upload all data to cloud
+
+// Auth
+isSignedIn();           // Check if connected
+signInToGoogleDrive();  // Connect to Google Drive
+autoInit();             // Initialize Google API on load
+```
+
+**Connection Flow**:
+
+- Parent enters Parent/Teacher mode → prompted to connect if not already
+- Once connected, stays connected (token in localStorage)
+- Kids never see sync UI - it happens silently during quiz
+
+**Data Storage**:
+
+- Single JSON file `wordmaster-data.json` in Google Drive's `appDataFolder`
+- Invisible to user (app-specific storage)
+- Contains: children, words, deletion records
+
+**Merge Strategy**:
+
+- Local queue positions always preserved
+- Cloud stats merged if they show more practice
+- New words from cloud added to end of local queue
+- Deletion records tracked for 30 days
 
 ## Common Patterns
 
@@ -326,11 +382,12 @@ npm run preview         # Preview production build
 ## Future Enhancements (TODO)
 
 - 3D visual effects with three.js (celebration animations)
-- Cloud sync (Firebase/Supabase for multi-device support)
+- ~~Cloud sync (Firebase/Supabase for multi-device support)~~ ✅ Implemented via Google Drive
 - Push notifications for daily quiz reminders
 - Word import from CSV files
 - Progress reports and statistics dashboard
 - Multiple quiz modes (timed, themed, etc.)
+- Real-time sync API for simultaneous multi-device usage
 
 ## Code Style
 
@@ -360,5 +417,5 @@ npm run preview         # Preview production build
 
 ---
 
-Last updated: 2025-11-05
-Project status: Core features complete, PWA functional, ready for enhancements
+Last updated: 2025-12-20
+Project status: Core features complete, PWA functional, Google Drive sync implemented

@@ -603,6 +603,239 @@ export function getLastSyncTime() {
 }
 
 /**
+ * Export data for a single child
+ */
+async function exportChildData(childId) {
+  const children = await getChildren();
+  const child = children.find((c) => c.id === childId);
+  if (!child) {
+    throw new Error(`Child with ID ${childId} not found`);
+  }
+
+  const words = await getWords(childId);
+
+  return {
+    child: child.toJSON(),
+    words: words.map((w) => w.toJSON()),
+  };
+}
+
+/**
+ * Merge cloud data for a single child into local data
+ */
+async function mergeChildData(localChildId, cloudChild, cloudWords) {
+  console.log(`=== MERGING CHILD: ${cloudChild.name} ===`);
+
+  // Get local words for this child
+  const localWords = await getWords(localChildId);
+  console.log(
+    `Local has ${localWords.length} words, cloud has ${cloudWords.length} words`
+  );
+
+  let wordsUpdated = 0;
+  let wordsAdded = 0;
+
+  // Process cloud words
+  for (const cloudWord of cloudWords) {
+    const localWord = localWords.find(
+      (w) => w.text.toLowerCase() === cloudWord.text.toLowerCase()
+    );
+
+    if (localWord) {
+      // Word exists locally - merge data
+      const updates = {};
+
+      // Always take cloud's drilled status if it's true
+      if (cloudWord.drilled && !localWord.drilled) {
+        updates.drilled = true;
+        console.log(`✅ Marking word as drilled from cloud: "${cloudWord.text}"`);
+      }
+
+      // Take cloud's stats if they show more practice
+      if (cloudWord.attempts > localWord.attempts) {
+        updates.attempts = cloudWord.attempts;
+        updates.successes = cloudWord.successes;
+        updates.errors = cloudWord.errors;
+        console.log(
+          `✅ Updating stats from cloud for: "${cloudWord.text}" (attempts: ${localWord.attempts} -> ${cloudWord.attempts})`
+        );
+      }
+
+      // Update lastPracticed if cloud is more recent
+      if (
+        cloudWord.lastPracticed &&
+        (!localWord.lastPracticed ||
+          new Date(cloudWord.lastPracticed) > new Date(localWord.lastPracticed))
+      ) {
+        updates.lastPracticed = cloudWord.lastPracticed;
+      }
+
+      // Take audioBlob from cloud if local doesn't have it
+      if (cloudWord.audioBlob && !localWord.audioBlob) {
+        updates.audioBlob = cloudWord.audioBlob;
+        console.log(`✅ Got audio from cloud for: "${cloudWord.text}"`);
+      }
+
+      // Apply updates if any
+      if (Object.keys(updates).length > 0) {
+        await db.words.update(localWord.id, updates);
+        wordsUpdated++;
+      }
+    } else {
+      // New word from cloud - add it
+      const newWord = {
+        text: cloudWord.text,
+        childId: localChildId,
+        position: localWords.length + wordsAdded, // Add to end of queue
+        drilled: cloudWord.drilled,
+        attempts: cloudWord.attempts,
+        successes: cloudWord.successes,
+        errors: cloudWord.errors,
+        lastPracticed: cloudWord.lastPracticed,
+        createdAt: cloudWord.createdAt,
+        audioBlob: cloudWord.audioBlob,
+      };
+      await db.words.add(newWord);
+      wordsAdded++;
+      console.log(
+        `✅ Added new word from cloud: "${cloudWord.text}" (drilled: ${cloudWord.drilled})`
+      );
+    }
+  }
+
+  console.log(
+    `=== CHILD MERGE COMPLETE: ${wordsUpdated} words updated, ${wordsAdded} words added ===`
+  );
+}
+
+/**
+ * Sync a single child's data FROM cloud
+ * Downloads cloud data and merges this child's words into local
+ */
+export async function syncChildFromCloud(childId) {
+  if (!isSignedIn()) {
+    console.log("Not signed in, skipping child sync from cloud");
+    return { success: false, reason: "not_signed_in" };
+  }
+
+  console.log(`[syncChildFromCloud] Starting for childId: ${childId}`);
+
+  try {
+    // Get the local child to find their name
+    const children = await getChildren();
+    const localChild = children.find((c) => c.id === childId);
+    if (!localChild) {
+      throw new Error(`Child with ID ${childId} not found locally`);
+    }
+
+    // Download full cloud data
+    const cloudData = await downloadFromGoogleDrive();
+    if (!cloudData) {
+      console.log("[syncChildFromCloud] No cloud data found");
+      return { success: true, noCloudData: true };
+    }
+
+    // Find this child in cloud data by name
+    const cloudChild = cloudData.children.find(
+      (c) => c.name.toLowerCase() === localChild.name.toLowerCase()
+    );
+
+    if (!cloudChild) {
+      console.log(
+        `[syncChildFromCloud] Child "${localChild.name}" not found in cloud`
+      );
+      return { success: true, childNotInCloud: true };
+    }
+
+    // Get this child's words from cloud
+    const cloudWords = cloudData.words.filter(
+      (w) => w.childId === cloudChild.id
+    );
+
+    // Merge cloud data for this child
+    await mergeChildData(childId, cloudChild, cloudWords);
+
+    console.log(`[syncChildFromCloud] Complete for ${localChild.name}`);
+    return { success: true };
+  } catch (error) {
+    console.error("[syncChildFromCloud] Error:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Sync a single child's data TO cloud
+ * Downloads cloud data, updates this child's portion, uploads back
+ */
+export async function syncChildToCloud(childId) {
+  if (!isSignedIn()) {
+    console.log("Not signed in, skipping child sync to cloud");
+    return { success: false, reason: "not_signed_in" };
+  }
+
+  console.log(`[syncChildToCloud] Starting for childId: ${childId}`);
+
+  try {
+    // Get local child data
+    const localChildData = await exportChildData(childId);
+
+    // Download existing cloud data
+    let cloudData = await downloadFromGoogleDrive();
+
+    if (!cloudData) {
+      // No cloud data exists - create initial structure with just this child
+      cloudData = {
+        version: 2,
+        lastSync: new Date().toISOString(),
+        children: [localChildData.child],
+        words: localChildData.words,
+        deletedItems: [],
+      };
+    } else {
+      // Find or add this child in cloud data
+      const cloudChildIndex = cloudData.children.findIndex(
+        (c) => c.name.toLowerCase() === localChildData.child.name.toLowerCase()
+      );
+
+      if (cloudChildIndex >= 0) {
+        // Update existing child
+        const oldCloudChildId = cloudData.children[cloudChildIndex].id;
+        cloudData.children[cloudChildIndex] = localChildData.child;
+
+        // Remove old words for this child and add new ones
+        cloudData.words = cloudData.words.filter(
+          (w) => w.childId !== oldCloudChildId
+        );
+        // Update word childIds to match cloud child ID format
+        const wordsWithUpdatedChildId = localChildData.words.map((w) => ({
+          ...w,
+          childId: localChildData.child.id,
+        }));
+        cloudData.words.push(...wordsWithUpdatedChildId);
+      } else {
+        // Add new child to cloud
+        cloudData.children.push(localChildData.child);
+        cloudData.words.push(...localChildData.words);
+      }
+
+      cloudData.lastSync = new Date().toISOString();
+    }
+
+    // Upload updated cloud data
+    await uploadToGoogleDrive(cloudData);
+
+    const lastSync = new Date().toISOString();
+    localStorage.setItem("wordmaster-last-sync", lastSync);
+
+    console.log(`[syncChildToCloud] Complete for ${localChildData.child.name}`);
+    return { success: true, lastSync };
+  } catch (error) {
+    console.error("[syncChildToCloud] Error:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
  * Notify status change
  */
 function notifyStatusChange(status) {

@@ -2,7 +2,6 @@ import { getChildren, getWords, createWord, deleteWord, deleteChild, updateChild
 import audio from '../services/audio.js';
 import { COMMON_WORDS } from '../data/commonWords.js';
 import * as googleSync from '../services/googleDriveSync.js';
-import { renderApp } from './App.js';
 import { generateAudioBulk } from '../services/ttsGenerator.js';
 import { getAudioForWord } from '../services/audioLoader.js';
 import { loadCommonWordsAudioFromServer, convertAudioDataToBlobs } from '../services/audioLoader.js';
@@ -134,8 +133,86 @@ function showMathChallenge(container, onSuccess, onBack) {
 export async function renderParentTeacher(container, onBack, selectedChildId) {
   // Show math challenge first
   showMathChallenge(container, async () => {
-    await showParentTeacherInterface(container, onBack, selectedChildId);
+    // After math challenge, check if we need to prompt for Google Drive connection
+    await checkAndPromptForSync(container, async () => {
+      await showParentTeacherInterface(container, onBack, selectedChildId);
+    }, onBack);
   }, onBack);
+}
+
+/**
+ * Check if user is connected to Google Drive, prompt to connect if not
+ */
+async function checkAndPromptForSync(container, onContinue, onBack) {
+  // Initialize Google API
+  try {
+    await googleSync.autoInit();
+  } catch (error) {
+    console.error('Failed to initialize Google Drive sync:', error);
+    // Continue without sync if initialization fails
+    await onContinue();
+    return;
+  }
+
+  // If already signed in, just continue
+  if (googleSync.isSignedIn()) {
+    await onContinue();
+    return;
+  }
+
+  // Show connection prompt
+  container.innerHTML = `
+    <div class="p-4">
+      <div class="max-w-md mx-auto">
+        <div class="card">
+          <div class="text-center mb-6">
+            <div class="text-5xl mb-4">☁️</div>
+            <h1 class="text-2xl font-bold text-primary-600 mb-2">Sync Your Data</h1>
+            <p class="text-gray-600">
+              Connect to Google Drive to sync your data across devices.
+              Your children's progress will be saved to the cloud.
+            </p>
+          </div>
+
+          <div class="space-y-3">
+            <button id="connect-btn" class="btn-primary w-full py-4 text-lg">
+              Connect Google Drive
+            </button>
+            <button id="skip-btn" class="btn-secondary w-full py-3">
+              Skip for now
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  container.querySelector('#connect-btn').addEventListener('click', async () => {
+    audio.playClick();
+    const btn = container.querySelector('#connect-btn');
+    btn.disabled = true;
+    btn.textContent = 'Connecting...';
+
+    try {
+      await googleSync.signInToGoogleDrive();
+      // After connecting, sync from cloud to get any existing data
+      btn.textContent = 'Syncing data...';
+      await googleSync.syncFromCloud();
+      audio.playSuccess();
+      await onContinue();
+    } catch (error) {
+      console.error('Error connecting to Google Drive:', error);
+      audio.playBuzz();
+      btn.textContent = 'Connect Google Drive';
+      btn.disabled = false;
+      alert('Failed to connect. You can try again later from the parent menu.');
+    }
+  });
+
+  container.querySelector('#skip-btn').addEventListener('click', async () => {
+    audio.playClick();
+    await onContinue();
+  });
 }
 
 /**
@@ -153,29 +230,6 @@ async function showParentTeacherInterface(container, onBack, selectedChildId) {
             <button id="back-btn" class="btn-secondary">
               ← Back
             </button>
-          </div>
-
-          <!-- Cloud Sync Section -->
-          <div id="cloud-sync-section" class="mb-6 p-4 bg-gradient-to-r from-purple-50 to-blue-50 border-2 border-purple-300 rounded-lg">
-            <div class="flex items-center justify-between">
-              <div>
-                <h3 class="text-lg font-bold text-gray-800 mb-1">☁️ Cloud Sync</h3>
-                <p id="sync-status-text" class="text-sm text-gray-600">
-                  Not connected
-                </p>
-              </div>
-              <div class="flex gap-2">
-                <button id="connect-drive-btn" class="btn-primary whitespace-nowrap">
-                  Connect Google Drive
-                </button>
-                <button id="sync-now-btn" class="btn-secondary hidden">
-                  Sync Now
-                </button>
-                <button id="disconnect-drive-btn" class="btn-secondary text-red-600 border-red-600 hover:bg-red-50 hidden">
-                  Disconnect
-                </button>
-              </div>
-            </div>
           </div>
 
           <div class="mb-6">
@@ -204,9 +258,6 @@ async function showParentTeacherInterface(container, onBack, selectedChildId) {
     audio.playClick();
     onBack();
   });
-
-  // Initialize cloud sync
-  setupCloudSync(container);
 
   const childSelect = container.querySelector('#child-select');
 
@@ -738,138 +789,4 @@ function escapeHtml(text) {
   const div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;
-}
-
-/**
- * Setup cloud sync UI and event listeners
- */
-async function setupCloudSync(container) {
-  const connectBtn = container.querySelector('#connect-drive-btn');
-  const syncBtn = container.querySelector('#sync-now-btn');
-  const disconnectBtn = container.querySelector('#disconnect-drive-btn');
-  const statusText = container.querySelector('#sync-status-text');
-
-  // Initialize Google API
-  try {
-    await googleSync.autoInit();
-  } catch (error) {
-    console.error('Failed to initialize Google Drive sync:', error);
-    statusText.textContent = 'Cloud sync unavailable';
-    connectBtn.disabled = true;
-    return;
-  }
-
-  // Update UI based on connection status
-  const updateSyncUI = (status) => {
-    const isConnected = googleSync.isSignedIn();
-
-    if (isConnected) {
-      connectBtn.classList.add('hidden');
-      syncBtn.classList.remove('hidden');
-      disconnectBtn.classList.remove('hidden');
-
-      if (status?.syncing) {
-        statusText.textContent = 'Syncing...';
-        syncBtn.disabled = true;
-      } else {
-        const lastSync = googleSync.getLastSyncTime();
-        if (lastSync) {
-          const date = new Date(lastSync);
-          statusText.textContent = `Last synced: ${date.toLocaleString()}`;
-        } else {
-          statusText.textContent = 'Connected';
-        }
-        syncBtn.disabled = false;
-      }
-    } else {
-      connectBtn.classList.remove('hidden');
-      syncBtn.classList.add('hidden');
-      disconnectBtn.classList.add('hidden');
-      statusText.textContent = 'Not connected';
-    }
-
-    if (status?.error) {
-      statusText.textContent = `Error: ${status.error}`;
-      statusText.classList.add('text-red-600');
-    } else {
-      statusText.classList.remove('text-red-600');
-    }
-  };
-
-  // Set up status callback
-  googleSync.setSyncStatusCallback(updateSyncUI);
-
-  // Initial UI update
-  updateSyncUI();
-
-  // Connect button
-  connectBtn.addEventListener('click', async () => {
-    audio.playClick();
-    connectBtn.disabled = true;
-    connectBtn.textContent = 'Connecting...';
-
-    try {
-      await googleSync.signInToGoogleDrive();
-      // After connecting, sync from cloud
-      await googleSync.syncFromCloud();
-      audio.playSuccess();
-
-      // Reload the page to show cloud data
-      const app = document.querySelector('#app');
-      if (app) {
-        renderApp(app);
-      }
-    } catch (error) {
-      console.error('Error connecting to Google Drive:', error);
-      audio.playBuzz();
-      connectBtn.textContent = 'Connect Google Drive';
-      connectBtn.disabled = false;
-      alert('Failed to connect to Google Drive. Please try again.');
-    }
-  });
-
-  // Sync now button
-  syncBtn.addEventListener('click', async () => {
-    audio.playClick();
-    const originalText = syncBtn.textContent;
-    syncBtn.disabled = true;
-    syncBtn.textContent = 'Syncing...';
-
-    try {
-      await googleSync.syncToCloud();
-      audio.playSuccess();
-      syncBtn.textContent = 'Synced!';
-
-      // Reload the parent interface to show merged data
-      setTimeout(async () => {
-        const children = await getChildren();
-        if (children.length > 0) {
-          // Reload with current child or first child
-          const childIdToLoad = state.lastSelectedChildId && children.some(c => c.id === state.lastSelectedChildId)
-            ? state.lastSelectedChildId
-            : children[0].id;
-          await showParentTeacherInterface(container, onBack, childIdToLoad);
-        } else {
-          await showParentTeacherInterface(container, onBack, null);
-        }
-      }, 1000);
-    } catch (error) {
-      console.error('Error syncing:', error);
-      audio.playBuzz();
-      syncBtn.textContent = originalText;
-      syncBtn.disabled = false;
-      alert('Failed to sync. Please try again.');
-    }
-  });
-
-  // Disconnect button
-  disconnectBtn.addEventListener('click', () => {
-    audio.playClick();
-
-    if (confirm('Disconnect from Google Drive? Your data will remain on this device, but will no longer sync.')) {
-      googleSync.signOutFromGoogleDrive();
-      audio.playSuccess();
-      updateSyncUI();
-    }
-  });
 }

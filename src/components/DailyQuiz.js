@@ -323,12 +323,20 @@ async function renderQuizTest(
   // Store in state for cleanup on exit
   state.practiceState = practiceState;
 
-  // Repeat button
-  content.querySelector("#repeat-btn").addEventListener("click", async () => {
+  // Repeat button - disable while speaking to prevent spam clicks
+  const repeatBtn = content.querySelector("#repeat-btn");
+  repeatBtn.addEventListener("click", async () => {
+    if (repeatBtn.disabled) return;
+    repeatBtn.disabled = true;
+    repeatBtn.classList.add("opacity-50", "cursor-not-allowed");
+
     audio.playClick();
     await tts.speakPrompt("Spell");
     await sleep(300);
     await tts.speakWord(word.text, word.audioBlob);
+
+    repeatBtn.disabled = false;
+    repeatBtn.classList.remove("opacity-50", "cursor-not-allowed");
   });
 
   attachQuizListeners(

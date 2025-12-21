@@ -94,7 +94,10 @@ export async function renderDailyQuiz(container, child, onComplete) {
   }
 
   // Pull the first N words from the queue for this quiz session
-  const quizQueue = allWords.slice(0, child.quizLength);
+  let quizQueue = allWords.slice(0, child.quizLength);
+
+  // Separate homophones to avoid confusion (e.g., "there"/"their", "to"/"two", "know"/"no")
+  quizQueue = separateHomophones(quizQueue);
 
   const state = {
     childId: child.id, // Store child ID for sync
@@ -1005,8 +1008,23 @@ function renderPerfectSession(container, state, onComplete) {
 function renderRegularCompletion(container, state, onComplete) {
   const perfectSpelling = state.completedWords.filter(w => w.firstTry).length;
   const recognizedCount = state.readingResults.filter(r => r.recognized).length;
+
+  // Build word list with emoji indicators for spelling and reading
   const wordList = state.completedWords
-    .map(w => `<button class="word-button inline-block px-3 py-2 ${w.firstTry ? 'bg-green-100 text-green-900 hover:bg-green-200' : 'bg-blue-100 text-blue-900 hover:bg-blue-200'} rounded-lg font-semibold text-base sm:text-lg m-1 active:scale-95 transition-all cursor-pointer" data-word="${escapeHtml(w.word)}">${escapeHtml(w.word)}</button>`)
+    .map(w => {
+      const missedSpelling = state.missedWords.has(w.id);
+      const missedReading = state.missedReading.has(w.word);
+      const spellingIcon = missedSpelling ? '✏️✗' : '✏️✓';
+      const readingIcon = missedReading ? '👁️✗' : '👁️✓';
+
+      // Color based on overall performance (green if both perfect, blue if any missed)
+      const isPerfect = !missedSpelling && !missedReading && w.firstTry;
+      const bgClass = isPerfect ? 'bg-green-100 text-green-900 hover:bg-green-200' : 'bg-blue-100 text-blue-900 hover:bg-blue-200';
+
+      return `<button class="word-button inline-block px-3 py-2 ${bgClass} rounded-lg font-semibold text-base sm:text-lg m-1 active:scale-95 transition-all cursor-pointer" data-word="${escapeHtml(w.word)}">
+        ${escapeHtml(w.word)} <span class="text-xs sm:text-sm">${spellingIcon} ${readingIcon}</span>
+      </button>`;
+    })
     .join('');
 
   container.innerHTML = `
@@ -1080,6 +1098,59 @@ function renderRegularCompletion(container, state, onComplete) {
 
     onComplete();
   });
+}
+
+/**
+ * Homophone pairs that sound the same but are spelled differently
+ * If both words from a pair are in the queue, ensure they're not adjacent
+ */
+const HOMOPHONE_PAIRS = [
+  ['there', 'their'],
+  ['to', 'two'],
+  ['know', 'no'],
+];
+
+/**
+ * Separate homophones in the queue so they're not adjacent
+ * This prevents confusion when a word is missed and retried
+ */
+function separateHomophones(queue) {
+  if (queue.length < 2) return queue;
+
+  const result = [...queue];
+  const wordTexts = result.map(w => w.text.toLowerCase());
+
+  // Find adjacent homophone pairs and swap to separate them
+  for (let i = 0; i < result.length - 1; i++) {
+    const currentWord = wordTexts[i];
+    const nextWord = wordTexts[i + 1];
+
+    // Check if current and next are homophones
+    const areHomophones = HOMOPHONE_PAIRS.some(pair =>
+      (pair.includes(currentWord) && pair.includes(nextWord))
+    );
+
+    if (areHomophones) {
+      // Find a non-adjacent position to swap with
+      // Try to find a word at least 2 positions away
+      for (let j = i + 2; j < result.length; j++) {
+        const candidateWord = wordTexts[j];
+        // Make sure the candidate isn't a homophone of the current word
+        const candidateIsHomophone = HOMOPHONE_PAIRS.some(pair =>
+          (pair.includes(currentWord) && pair.includes(candidateWord))
+        );
+
+        if (!candidateIsHomophone) {
+          // Swap next word with candidate
+          [result[i + 1], result[j]] = [result[j], result[i + 1]];
+          [wordTexts[i + 1], wordTexts[j]] = [wordTexts[j], wordTexts[i + 1]];
+          break;
+        }
+      }
+    }
+  }
+
+  return result;
 }
 
 /**

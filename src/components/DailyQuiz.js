@@ -767,6 +767,9 @@ async function renderReadingCard(container, state, child, onComplete) {
     hearAnswerBtn.classList.add("hidden");
     assessmentButtons.classList.remove("hidden");
 
+    // Scroll to make assessment buttons visible on mobile
+    assessmentButtons.scrollIntoView({ behavior: "smooth", block: "end" });
+
     // Ask "Did you get it?"
     await tts.speakPrompt("Did you get it?");
   });

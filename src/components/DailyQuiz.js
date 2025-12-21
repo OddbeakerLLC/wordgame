@@ -1,6 +1,7 @@
 import {
   getWords,
   recordAttempt,
+  recordSightRead,
   moveWordToBack,
   moveWordToSecond,
   moveWordToPosition,
@@ -100,18 +101,24 @@ export async function renderDailyQuiz(container, child, onComplete) {
     quizQueue: quizQueue, // Words for this quiz session
     quizLength: child.quizLength,
     completedCount: 0,
-    completedWords: [], // Track completed words {word: string, firstTry: boolean}
+    completedWords: [], // Track completed words {word: string, firstTry: boolean, id: number, audioBlob: Blob}
     totalErrors: 0, // Track total errors across entire quiz
     missedWords: new Set(), // Track word IDs that have been missed during this quiz session
+    // Reading phase state
+    phase: 'spelling', // 'spelling' | 'reading' | 'complete'
+    readingQueue: [], // Words for reading phase (populated after spelling)
+    readingIndex: 0,
+    readingResults: [], // { word, recognized: boolean }
+    missedReading: new Set(), // Track words that were missed at least once during reading
   };
 
   render(container, child, state, onComplete);
 }
 
 async function render(container, child, state, onComplete) {
-  // Check if quiz is complete first
+  // Check if spelling phase is complete - transition to reading
   if (state.completedCount >= state.quizLength) {
-    renderComplete(container, state, onComplete);
+    renderComplete(container, state, child, onComplete);
     return;
   }
 
@@ -399,6 +406,9 @@ function attachQuizListeners(
         );
       });
     });
+
+    // Scroll to make letter buttons visible on mobile
+    letterButtons.scrollIntoView({ behavior: "smooth", block: "end" });
   }
 
   // Keyboard input (always available in hybrid mode)
@@ -565,19 +575,9 @@ async function completeQuizWord(
   // Record the attempt in the database
   await recordAttempt(word.id, !hadErrors);
 
-  // Update queue position based on performance
+  // Track errors for this session (queue position updates deferred until full session completes)
   if (hadErrors) {
-    // Wrong answer: move to position 2 (gets another try soon)
-    // Also track this word as missed for this session
     state.missedWords.add(word.id);
-    await moveWordToSecond(word.id);
-  } else if (wasPreviouslyMissed) {
-    // Correct on 2nd+ attempt: move to position N (quiz length)
-    // Keep in rotation until they can get it right on first try
-    await moveWordToPosition(word.id, state.quizLength);
-  } else {
-    // Correct on 1st attempt: move to back of queue (mastered!)
-    await moveWordToBack(word.id);
   }
 
   // Play success sound
@@ -615,6 +615,7 @@ async function completeQuizWord(
     state.completedCount++;
     // Track this completed word
     state.completedWords.push({
+      id: word.id,
       word: word.text,
       firstTry: !wasPreviouslyMissed, // Perfect on first attempt (never missed this session)
       audioBlob: word.audioBlob // Store audio for playback at end
@@ -631,22 +632,263 @@ async function completeQuizWord(
 }
 
 /**
- * Complete phase: Quiz finished
+ * Spelling phase complete - transition to reading phase
  */
-function renderComplete(container, state, onComplete) {
-  const isPerfect = state.totalErrors === 0;
+async function renderComplete(container, state, child, onComplete) {
+  // Transition to reading phase
+  state.phase = 'reading';
 
-  if (isPerfect) {
-    renderPerfectQuiz(container, state, onComplete);
+  // Prepare reading queue from completed words
+  // For 6 words or fewer, keep same order; otherwise shuffle
+  state.readingQueue = [...state.completedWords];
+  if (state.readingQueue.length > 6) {
+    state.readingQueue.sort(() => Math.random() - 0.5);
+  }
+  state.readingIndex = 0;
+  state.readingResults = [];
+
+  // Show transition screen
+  container.innerHTML = `
+    <div class="flex justify-center p-2 sm:p-4">
+      <div class="card max-w-3xl w-full p-4 sm:p-6 text-center">
+        <div class="space-y-6 sm:space-y-8 py-8 sm:py-12">
+          <div class="text-5xl sm:text-6xl animate-bounce">📚</div>
+          <h3 class="text-3xl sm:text-4xl font-bold text-primary-600">
+            Great spelling!
+          </h3>
+          <p class="text-xl sm:text-2xl text-gray-600">
+            Now let's read!
+          </p>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Speak the transition
+  await tts.speakPrompt("Great spelling");
+  await sleep(500);
+  await tts.speakPrompt("Now let's read");
+  await sleep(1000);
+
+  // Start reading phase
+  renderReadingCard(container, state, child, onComplete);
+}
+
+/**
+ * Render a reading flashcard
+ */
+async function renderReadingCard(container, state, child, onComplete) {
+  // Check if reading phase is complete
+  if (state.readingIndex >= state.readingQueue.length) {
+    renderFinalCompletion(container, state, onComplete);
+    return;
+  }
+
+  const currentWord = state.readingQueue[state.readingIndex];
+  const progress = state.readingIndex;
+  const total = state.readingQueue.length;
+
+  container.innerHTML = `
+    <div class="flex justify-center p-2 sm:p-4">
+      <div class="card max-w-3xl w-full p-4 sm:p-6">
+        <div class="mb-4 sm:mb-6">
+          <div class="flex items-center justify-between gap-2 mb-2">
+            <h2 class="text-lg sm:text-2xl font-bold text-primary-600 truncate flex-shrink">
+              Reading Time
+            </h2>
+            <div class="flex items-center gap-2 sm:gap-4 flex-shrink-0">
+              <span class="text-sm sm:text-lg text-gray-600 whitespace-nowrap">${progress}/${total}</span>
+              <button id="exit-reading-btn" class="btn-secondary text-xs sm:text-sm px-2 py-1 sm:px-4 sm:py-2">
+                Exit
+              </button>
+            </div>
+          </div>
+          <div class="w-full bg-gray-200 rounded-full h-2 sm:h-3">
+            <div class="bg-primary-600 h-2 sm:h-3 rounded-full transition-all duration-300"
+                 style="width: ${(progress / total) * 100}%"></div>
+          </div>
+        </div>
+
+        <div id="reading-content" class="text-center py-6 sm:py-8">
+          <div class="space-y-6 sm:space-y-8">
+            <div class="flashcard mx-auto max-w-md">
+              <span class="flashcard-word">${escapeHtml(currentWord.word)}</span>
+            </div>
+
+            <button id="hear-answer-btn" class="btn-primary text-base sm:text-lg">
+              🔊 Hear the answer
+            </button>
+
+            <div id="assessment-buttons" class="hidden space-y-4">
+              <button id="hear-again-btn" class="btn-secondary text-base sm:text-lg">
+                🔊 Hear it again
+              </button>
+              <div class="flex justify-center gap-4">
+                <button id="got-it-btn" class="btn-got-it text-3xl sm:text-4xl px-6 py-3" title="I got it!">
+                  👍😊
+                </button>
+                <button id="practice-more-btn" class="btn-practice-more text-3xl sm:text-4xl px-6 py-3" title="I'll practice more">
+                  👎😐
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Exit button handler
+  container.querySelector("#exit-reading-btn").addEventListener("click", () => {
+    audio.playClick();
+    onComplete();
+  });
+
+  // Speak the instruction for first card or "Here is the next word" for subsequent cards
+  if (state.readingIndex === 0) {
+    await tts.speakPrompt("Read this word out loud then check your answer");
+  } else {
+    await tts.speakPrompt("Here is the next word");
+  }
+
+  // "Hear the answer" button - reveals assessment options
+  const hearAnswerBtn = container.querySelector("#hear-answer-btn");
+  const assessmentButtons = container.querySelector("#assessment-buttons");
+
+  hearAnswerBtn.addEventListener("click", async () => {
+    if (hearAnswerBtn.disabled) return;
+    hearAnswerBtn.disabled = true;
+    hearAnswerBtn.classList.add("opacity-50", "cursor-not-allowed");
+
+    audio.playClick();
+    await tts.speakWord(currentWord.word, currentWord.audioBlob);
+
+    // Hide "hear answer" button, show assessment buttons
+    hearAnswerBtn.classList.add("hidden");
+    assessmentButtons.classList.remove("hidden");
+
+    // Ask "Did you get it?"
+    await tts.speakPrompt("Did you get it?");
+  });
+
+  // "Hear it again" button
+  const hearAgainBtn = container.querySelector("#hear-again-btn");
+  hearAgainBtn.addEventListener("click", async () => {
+    if (hearAgainBtn.disabled) return;
+    hearAgainBtn.disabled = true;
+    hearAgainBtn.classList.add("opacity-50", "cursor-not-allowed");
+
+    audio.playClick();
+    await tts.speakWord(currentWord.word, currentWord.audioBlob);
+
+    hearAgainBtn.disabled = false;
+    hearAgainBtn.classList.remove("opacity-50", "cursor-not-allowed");
+  });
+
+  // "I got it!" button
+  container.querySelector("#got-it-btn").addEventListener("click", async () => {
+    audio.playClick();
+    audio.playSuccess();
+    await handleReadingResponse(true, currentWord, state, container, child, onComplete);
+  });
+
+  // "I'll practice more" button
+  container.querySelector("#practice-more-btn").addEventListener("click", async () => {
+    audio.playClick();
+    await handleReadingResponse(false, currentWord, state, container, child, onComplete);
+  });
+}
+
+/**
+ * Handle reading self-assessment response
+ */
+async function handleReadingResponse(recognized, currentWord, state, container, child, onComplete) {
+  // Record the sight-read attempt
+  await recordSightRead(currentWord.id, recognized);
+
+  // Brief feedback
+  const content = container.querySelector("#reading-content");
+  content.innerHTML = `
+    <div class="space-y-6 sm:space-y-8">
+      <div class="text-5xl sm:text-6xl">${recognized ? "🌟" : "👍"}</div>
+      <h3 class="text-3xl sm:text-4xl font-bold ${recognized ? "text-green-600" : "text-blue-600"}">
+        ${recognized ? "Awesome!" : "Keep practicing!"}
+      </h3>
+      <p class="text-xl sm:text-2xl text-gray-700">
+        ${escapeHtml(currentWord.word.toUpperCase())}
+      </p>
+    </div>
+  `;
+
+  await sleep(1200);
+
+  if (recognized) {
+    // Success: track result and move to next
+    state.readingResults.push({
+      word: currentWord.word,
+      recognized: true
+    });
+    state.readingIndex++;
+  } else {
+    // Failed: track that this word was missed
+    state.missedReading.add(currentWord.word);
+
+    // Reinsert word 2 positions later (like spelling quiz)
+    const currentIdx = state.readingIndex;
+    const insertIdx = Math.min(currentIdx + 2, state.readingQueue.length);
+
+    // Insert the failed word back into queue
+    state.readingQueue.splice(insertIdx, 0, currentWord);
+
+    // Move index forward (we'll see the next word, then this one again)
+    state.readingIndex++;
+  }
+
+  // Next card or completion
+  renderReadingCard(container, state, child, onComplete);
+}
+
+/**
+ * Finalize queue positions after full session (spelling + reading) completes
+ * This is called only when the child finishes both phases
+ */
+async function finalizeQueuePositions(state) {
+  for (const completedWord of state.completedWords) {
+    const wasMissedSpelling = state.missedWords.has(completedWord.id);
+    const wasMissedReading = state.missedReading.has(completedWord.word);
+
+    if (wasMissedSpelling || wasMissedReading) {
+      // Had trouble with spelling OR reading: move to position N (quiz length)
+      // Keep in rotation for more practice
+      await moveWordToPosition(completedWord.id, state.quizLength);
+    } else if (!completedWord.firstTry) {
+      // Correct on 2nd+ spelling attempt but got reading right
+      await moveWordToPosition(completedWord.id, state.quizLength);
+    } else {
+      // Perfect on both spelling (first try) AND reading: move to back (mastered!)
+      await moveWordToBack(completedWord.id);
+    }
+  }
+}
+
+/**
+ * Final completion screen - shows both spelling and reading results
+ */
+function renderFinalCompletion(container, state, onComplete) {
+  const perfectSpelling = state.totalErrors === 0;
+  const perfectReading = state.missedReading.size === 0;
+
+  if (perfectSpelling && perfectReading) {
+    renderPerfectSession(container, state, onComplete);
   } else {
     renderRegularCompletion(container, state, onComplete);
   }
 }
 
 /**
- * Perfect quiz celebration - no errors!
+ * Perfect session celebration - no spelling errors AND all words recognized!
  */
-function renderPerfectQuiz(container, state, onComplete) {
+function renderPerfectSession(container, state, onComplete) {
   const wordList = state.completedWords
     .map(w => `<button class="word-button inline-block px-3 py-2 bg-yellow-100 text-yellow-900 rounded-lg font-bold text-lg sm:text-xl m-1 hover:bg-yellow-200 active:scale-95 transition-all cursor-pointer" data-word="${escapeHtml(w.word)}">${escapeHtml(w.word.toUpperCase())}</button>`)
     .join('');
@@ -662,12 +904,17 @@ function renderPerfectQuiz(container, state, onComplete) {
           <div class="text-6xl sm:text-8xl animate-bounce">🏆</div>
 
           <h2 class="text-4xl sm:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500">
-            PERFECT SCORE!
+            PERFECT!
           </h2>
 
-          <p class="text-2xl sm:text-3xl font-bold text-green-600">
-            ${state.quizLength} word${state.quizLength === 1 ? "" : "s"} with ZERO mistakes!
-          </p>
+          <div class="space-y-2">
+            <p class="text-2xl sm:text-3xl font-bold text-green-600">
+              Spelling AND Reading!
+            </p>
+            <p class="text-lg sm:text-xl text-gray-600">
+              ${state.quizLength} words with zero mistakes!
+            </p>
+          </div>
 
           <div class="my-6 sm:my-8">
             <p class="text-lg sm:text-xl text-gray-700 font-semibold mb-4">
@@ -739,6 +986,9 @@ function renderPerfectQuiz(container, state, onComplete) {
     audio.stop('huge-applause');
     fireworks.stop();
 
+    // Finalize queue positions now that full session is complete
+    await finalizeQueuePositions(state);
+
     // Sync this child's data to cloud
     await syncChildAfterQuiz(childId);
 
@@ -747,10 +997,11 @@ function renderPerfectQuiz(container, state, onComplete) {
 }
 
 /**
- * Regular quiz completion - with some errors
+ * Regular session completion - with some errors in spelling or reading
  */
 function renderRegularCompletion(container, state, onComplete) {
-  const perfectWords = state.completedWords.filter(w => w.firstTry).length;
+  const perfectSpelling = state.completedWords.filter(w => w.firstTry).length;
+  const recognizedCount = state.readingResults.filter(r => r.recognized).length;
   const wordList = state.completedWords
     .map(w => `<button class="word-button inline-block px-3 py-2 ${w.firstTry ? 'bg-green-100 text-green-900 hover:bg-green-200' : 'bg-blue-100 text-blue-900 hover:bg-blue-200'} rounded-lg font-semibold text-base sm:text-lg m-1 active:scale-95 transition-all cursor-pointer" data-word="${escapeHtml(w.word)}">${escapeHtml(w.word)}</button>`)
     .join('');
@@ -765,15 +1016,20 @@ function renderRegularCompletion(container, state, onComplete) {
             Great Job!
           </h3>
 
-          <div class="space-y-2">
+          <div class="space-y-3">
             <p class="text-xl sm:text-2xl text-gray-700">
-              You spelled ${state.quizLength} word${state.quizLength === 1 ? "" : "s"}!
+              You practiced ${state.quizLength} word${state.quizLength === 1 ? "" : "s"}!
             </p>
-            ${perfectWords > 0 ? `
-              <p class="text-lg sm:text-xl text-green-600 font-semibold">
-                ${perfectWords} perfect on first try! ⭐
-              </p>
-            ` : ''}
+            <div class="flex justify-center gap-6 sm:gap-8 text-base sm:text-lg">
+              <div class="text-center">
+                <p class="font-bold text-primary-600">Spelling</p>
+                <p class="text-gray-600">${perfectSpelling}/${state.quizLength} perfect</p>
+              </div>
+              <div class="text-center">
+                <p class="font-bold text-primary-600">Reading</p>
+                <p class="text-gray-600">${recognizedCount}/${state.readingResults.length} recognized</p>
+              </div>
+            </div>
           </div>
 
           <div class="my-4 sm:my-6">
@@ -783,10 +1039,6 @@ function renderRegularCompletion(container, state, onComplete) {
             <div id="word-list" class="flex flex-wrap justify-center max-w-3xl mx-auto">
               ${wordList}
             </div>
-            <p class="text-sm sm:text-base text-gray-500 mt-3">
-              <span class="inline-block w-3 h-3 bg-green-100 rounded mr-1"></span> First try
-              <span class="inline-block w-3 h-3 bg-blue-100 rounded ml-3 mr-1"></span> Needed practice
-            </p>
           </div>
 
           <button id="done-btn" class="btn-primary text-lg sm:text-xl px-6 py-3 sm:px-8 sm:py-4">
@@ -816,6 +1068,9 @@ function renderRegularCompletion(container, state, onComplete) {
   container.querySelector("#done-btn").addEventListener("click", async () => {
     audio.playClick();
     audio.stop('applause');
+
+    // Finalize queue positions now that full session is complete
+    await finalizeQueuePositions(state);
 
     // Sync this child's data to cloud
     await syncChildAfterQuiz(childId);

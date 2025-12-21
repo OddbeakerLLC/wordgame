@@ -284,6 +284,24 @@ export async function recordAttempt(wordId, success, errorCount = 0) {
 }
 
 /**
+ * Record a sight-reading attempt (flashcard view)
+ * @param {number} wordId - Word ID
+ * @param {boolean} recognized - Did the child recognize it?
+ */
+export async function recordSightRead(wordId, recognized) {
+  const word = await getWord(wordId);
+  if (!word) return;
+
+  const updates = {
+    sightReadViews: (word.sightReadViews || 0) + 1,
+    sightReadKnown: (word.sightReadKnown || 0) + (recognized ? 1 : 0),
+    lastSightRead: new Date().toISOString()
+  };
+
+  await db.words.update(wordId, updates);
+}
+
+/**
  * Sort word queue by failed attempts (one-time initialization)
  * Priority:
  * 1. Words with failed attempts (attempts > successes) come first, sorted by number of failures (descending)

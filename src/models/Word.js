@@ -14,6 +14,11 @@ export class Word {
     this.lastPracticed = data.lastPracticed || null;
     this.createdAt = data.createdAt || new Date().toISOString();
     this.audioBlob = data.audioBlob || null; // Cached audio from ElevenLabs (Blob)
+
+    // Sight-reading tracking
+    this.sightReadViews = data.sightReadViews || 0; // Times shown in flashcard mode
+    this.sightReadKnown = data.sightReadKnown || 0; // Times child said "I got it!"
+    this.lastSightRead = data.lastSightRead || null; // Last flashcard view timestamp
   }
 
   toJSON() {
@@ -28,7 +33,10 @@ export class Word {
       errors: this.errors,
       lastPracticed: this.lastPracticed,
       createdAt: this.createdAt,
-      audioBlob: this.audioBlob // Include audioBlob in JSON representation
+      audioBlob: this.audioBlob, // Include audioBlob in JSON representation
+      sightReadViews: this.sightReadViews,
+      sightReadKnown: this.sightReadKnown,
+      lastSightRead: this.lastSightRead
     };
   }
 
@@ -45,5 +53,13 @@ export class Word {
    */
   needsPractice() {
     return this.errors > 0 || this.attempts < 3;
+  }
+
+  /**
+   * Calculate sight-reading recognition rate (0-1)
+   */
+  get sightReadRate() {
+    if (this.sightReadViews === 0) return 0;
+    return this.sightReadKnown / this.sightReadViews;
   }
 }

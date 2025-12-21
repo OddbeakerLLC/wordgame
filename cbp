@@ -1,0 +1,25 @@
+#!/bin/bash
+
+# cbp - Commit, Build, Push to oddbeaker.com
+# Usage: ./cbp "commit message"
+
+if [ -z "$1" ]; then
+    echo "Usage: ./cbp \"commit message\""
+    exit 1
+fi
+
+MESSAGE="$1"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# Go to oddbeaker.com
+cd "$SCRIPT_DIR/../oddbeaker.com" || { echo "Failed to cd to ../oddbeaker.com"; exit 1; }
+
+# Git add, commit, push
+git add -A
+git commit -m "$MESSAGE"
+git push
+
+# Return to original directory
+cd "$SCRIPT_DIR"
+
+echo "Done!"

@@ -254,8 +254,21 @@ async function showParentTeacherInterface(container, onBack, selectedChildId) {
   `;
 
   // Event listeners
-  container.querySelector('#back-btn').addEventListener('click', () => {
+  container.querySelector('#back-btn').addEventListener('click', async () => {
     audio.playClick();
+
+    // Sync to cloud before leaving if connected
+    if (googleSync.isSignedIn()) {
+      try {
+        console.log('Syncing to cloud before exiting Parent/Teacher mode...');
+        await googleSync.syncToCloud();
+        console.log('Sync complete');
+      } catch (error) {
+        console.error('Error syncing to cloud on exit:', error);
+        // Continue exiting even if sync fails
+      }
+    }
+
     onBack();
   });
 

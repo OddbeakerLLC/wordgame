@@ -39,23 +39,24 @@ async function triggerBackgroundSync() {
   try {
     // Initialize Google services first
     const initialized = await googleSync.autoInit();
+    console.log('[App] Google sync initialized:', initialized, 'Signed in:', googleSync.isSignedIn());
 
     if (initialized && googleSync.isSignedIn()) {
-      console.log('User is signed in, syncing in background...');
+      console.log('[App] Starting background sync from cloud...');
       // Fire and forget - don't await, don't block UI
       googleSync.syncFromCloud()
-        .then(() => {
-          console.log('Background sync completed');
+        .then((result) => {
+          console.log('[App] Background sync completed:', result);
           // If we're on a screen that shows data, we might want to refresh
           // For now, just log - the next navigation will show updated data
         })
         .catch(err => {
           // Token might be expired, just log the error
-          console.log('Background sync failed (this is OK if token expired):', err.message);
+          console.log('[App] Background sync failed (this is OK if token expired):', err.message);
         });
     }
   } catch (error) {
-    console.error('Error initializing background sync:', error);
+    console.error('[App] Error initializing background sync:', error);
   }
 }
 

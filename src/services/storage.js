@@ -50,6 +50,16 @@ export async function initDB() {
 
 export async function getChildren() {
   const children = await db.children.toArray();
+  return children
+    .filter(c => !c.deleted) // Filter out soft-deleted children
+    .map(c => new Child(c));
+}
+
+/**
+ * Get ALL children including deleted (for sync purposes)
+ */
+export async function getAllChildren() {
+  const children = await db.children.toArray();
   return children.map(c => new Child(c));
 }
 
@@ -76,25 +86,17 @@ export async function updateChild(id, updates) {
 }
 
 export async function deleteChild(id) {
-  // Get child data before deletion for tracking
-  const child = await getChild(id);
-  if (!child) return;
-
-  // Delete all words for this child
-  const words = await getWords(id);
-  for (const word of words) {
-    await deleteWord(word.id);
-  }
-
-  // Delete the child
-  await db.children.delete(id);
-
-  // Track deletion for sync (use child name as unique key)
-  await db.deletedItems.add({
-    itemType: 'child',
-    itemKey: child.name.toLowerCase(),
-    deletedAt: new Date().toISOString()
+  // Soft-delete: set deleted flag instead of removing from database
+  await db.children.update(id, {
+    deleted: true,
+    lastModified: new Date().toISOString()
   });
+
+  // Soft-delete all words for this child too
+  const words = await db.words.where('childId').equals(id).toArray();
+  for (const word of words) {
+    await db.words.update(word.id, { deleted: true });
+  }
 }
 
 /**
@@ -102,6 +104,19 @@ export async function deleteChild(id) {
  */
 
 export async function getWords(childId) {
+  const words = await db.words
+    .where('childId')
+    .equals(childId)
+    .sortBy('position');
+  return words
+    .filter(w => !w.deleted) // Filter out soft-deleted words
+    .map(w => new Word(w));
+}
+
+/**
+ * Get ALL words including deleted (for sync purposes)
+ */
+export async function getAllWords(childId) {
   const words = await db.words
     .where('childId')
     .equals(childId)
@@ -151,35 +166,15 @@ export async function updateWord(id, updates) {
 }
 
 export async function deleteWord(id) {
-  const word = await getWord(id);
+  const word = await db.words.get(id);
   if (!word) return;
 
-  // Get child for tracking
-  const child = await getChild(word.childId);
-  if (!child) return;
-
-  // Shift all words after this one forward by 1
-  const wordsAfter = await db.words
-    .where('childId')
-    .equals(word.childId)
-    .and(w => w.position > word.position)
-    .toArray();
-
-  for (const w of wordsAfter) {
-    await db.words.update(w.id, { position: w.position - 1 });
-  }
-
-  await db.words.delete(id);
+  // Soft-delete: set deleted flag instead of removing from database
+  // No need to reorder positions - deleted words are just invisible
+  await db.words.update(id, { deleted: true });
 
   // Update child's lastModified timestamp
   await db.children.update(word.childId, { lastModified: new Date().toISOString() });
-
-  // Track deletion for sync (use child name + word text as unique key)
-  await db.deletedItems.add({
-    itemType: 'word',
-    itemKey: `${child.name.toLowerCase()}:${word.text.toLowerCase()}`,
-    deletedAt: new Date().toISOString()
-  });
 }
 
 /**

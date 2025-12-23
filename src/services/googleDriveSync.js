@@ -6,9 +6,7 @@
  * Stores data in a single JSON file in the app data folder
  */
 
-import { getChildren, getWords, db } from "./storage.js";
-import { Child } from "../models/Child.js";
-import { Word } from "../models/Word.js";
+import { getAllChildren, getAllWords, db } from "./storage.js";
 
 // Google API configuration
 // NOTE: Replace with your actual Google Cloud Project Client ID
@@ -176,25 +174,23 @@ function isUnauthorizedError(error) {
 
 /**
  * Export all data from IndexedDB
+ * Includes ALL children and words (including soft-deleted ones) for sync
  */
 async function exportAllData() {
-  const children = await getChildren();
+  // Use getAllChildren/getAllWords to include soft-deleted items
+  const children = await getAllChildren();
   const allWords = [];
 
   for (const child of children) {
-    const words = await getWords(child.id);
+    const words = await getAllWords(child.id);
     allWords.push(...words);
   }
 
-  // Get all deletion records
-  const deletedItems = await db.deletedItems.toArray();
-
   return {
-    version: 2, // Increment version for deletion tracking
+    version: 3, // Version 3: soft-delete (no deletedItems table)
     lastSync: new Date().toISOString(),
     children: children.map((c) => c.toJSON()),
     words: allWords.map((w) => w.toJSON()),
-    deletedItems: deletedItems, // Include deletion tracking
   };
 }
 
@@ -202,14 +198,13 @@ async function exportAllData() {
  * Import data into IndexedDB (FULL REPLACE - used for initial sync)
  */
 async function importAllData(data) {
-  if (!data || (data.version !== 1 && data.version !== 2)) {
+  if (!data || (data.version !== 1 && data.version !== 2 && data.version !== 3)) {
     throw new Error("Invalid data format");
   }
 
   // Clear existing data
   await db.children.clear();
   await db.words.clear();
-  await db.deletedItems.clear();
 
   // Import children
   const childIdMap = new Map(); // Old ID -> New ID
@@ -231,14 +226,6 @@ async function importAllData(data) {
     }
   }
 
-  // Import deletion records (if present in v2 data)
-  if (data.version === 2 && data.deletedItems) {
-    for (const deletedItem of data.deletedItems) {
-      delete deletedItem.id; // Let DB assign new ID
-      await db.deletedItems.add(deletedItem);
-    }
-  }
-
   console.log(
     `Imported ${data.children.length} children and ${data.words.length} words`
   );
@@ -249,88 +236,46 @@ async function importAllData(data) {
  * - Match children and words by name/text
  * - Update drilled status, attempts, successes, errors from cloud if cloud has more data
  * - Keep local position (queue order)
- * - Apply deletions from cloud
+ * - Sync deleted flag from cloud
  */
 async function mergeCloudData(cloudData) {
-  if (!cloudData || (cloudData.version !== 1 && cloudData.version !== 2)) {
+  if (!cloudData || (cloudData.version !== 1 && cloudData.version !== 2 && cloudData.version !== 3)) {
     throw new Error("Invalid data format");
   }
 
   console.log('=== MERGE STARTING ===');
   console.log(`Cloud has ${cloudData.children.length} children and ${cloudData.words.length} words`);
 
-  // STEP 1: Apply deletions from cloud (if v2 data)
-  if (cloudData.version === 2 && cloudData.deletedItems) {
-    console.log(`Applying ${cloudData.deletedItems.length} deletions from cloud...`);
-    for (const deletedItem of cloudData.deletedItems) {
-      if (deletedItem.itemType === 'child') {
-        // Find and delete child by name
-        const localChildren = await getChildren();
-        const childToDelete = localChildren.find(c => c.name.toLowerCase() === deletedItem.itemKey);
-        if (childToDelete) {
-          console.log(`🗑️ Deleting child from cloud deletion: ${childToDelete.name}`);
-          // Delete without tracking (to avoid re-adding to deletedItems)
-          const words = await getWords(childToDelete.id);
-          for (const word of words) {
-            await db.words.delete(word.id);
-          }
-          await db.children.delete(childToDelete.id);
-        }
-      } else if (deletedItem.itemType === 'word') {
-        // Parse child:word format
-        const [childName, wordText] = deletedItem.itemKey.split(':');
-        const localChildren = await getChildren();
-        const child = localChildren.find(c => c.name.toLowerCase() === childName);
-        if (child) {
-          const words = await getWords(child.id);
-          const wordToDelete = words.find(w => w.text.toLowerCase() === wordText);
-          if (wordToDelete) {
-            console.log(`🗑️ Deleting word from cloud deletion: "${wordToDelete.text}" (child: ${child.name})`);
-            // Delete without tracking
-            await db.words.delete(wordToDelete.id);
-          }
-        }
-      }
-    }
-
-    // Merge cloud deletions into local deletions
-    for (const deletedItem of cloudData.deletedItems) {
-      // Check if we already have this deletion record
-      const existing = await db.deletedItems
-        .where('itemKey')
-        .equals(deletedItem.itemKey)
-        .and(item => item.itemType === deletedItem.itemType)
-        .first();
-
-      if (!existing) {
-        delete deletedItem.id;
-        await db.deletedItems.add(deletedItem);
-      }
-    }
-  }
-
-  // STEP 2: Merge children and words
-
-  const localChildren = await getChildren();
-  console.log(`Local has ${localChildren.length} children`);
+  // Get ALL local children (including deleted) for merging
+  const localChildren = await getAllChildren();
+  console.log(`Local has ${localChildren.length} children (including deleted)`);
 
   const childNameMap = new Map(); // child name -> local child ID
 
   // Map local children by name
   for (const child of localChildren) {
     childNameMap.set(child.name.toLowerCase(), child.id);
-    console.log(`Local child: ${child.name} (ID: ${child.id})`);
+    console.log(`Local child: ${child.name} (ID: ${child.id}, deleted: ${child.deleted})`);
   }
 
-  // Process cloud children - add missing ones
+  // Process cloud children - add missing ones or update deleted flag
   for (const cloudChild of cloudData.children) {
     const childName = cloudChild.name.toLowerCase();
-    if (!childNameMap.has(childName)) {
-      // New child from cloud - add it
-      delete cloudChild.id;
-      const newId = await db.children.add(cloudChild);
+    const localChildId = childNameMap.get(childName);
+
+    if (localChildId) {
+      // Child exists locally - sync deleted flag if cloud says deleted
+      if (cloudChild.deleted) {
+        await db.children.update(localChildId, { deleted: true });
+        console.log(`🗑️ Marked child as deleted from cloud: ${cloudChild.name}`);
+      }
+    } else {
+      // New child from cloud - add it (including if deleted)
+      const childData = { ...cloudChild };
+      delete childData.id;
+      const newId = await db.children.add(childData);
       childNameMap.set(childName, newId);
-      console.log(`✅ Added new child from cloud: ${cloudChild.name}`);
+      console.log(`✅ Added new child from cloud: ${cloudChild.name} (deleted: ${cloudChild.deleted || false})`);
     }
   }
 
@@ -352,13 +297,19 @@ async function mergeCloudData(cloudData) {
       continue;
     }
 
-    // Find matching local word by text and childId
-    const localWords = await getWords(localChildId);
+    // Find matching local word by text and childId (including deleted words)
+    const localWords = await getAllWords(localChildId);
     const localWord = localWords.find(w => w.text.toLowerCase() === cloudWord.text.toLowerCase());
 
     if (localWord) {
       // Word exists locally - merge data
       const updates = {};
+
+      // Sync deleted flag from cloud
+      if (cloudWord.deleted && !localWord.deleted) {
+        updates.deleted = true;
+        console.log(`🗑️ Marking word as deleted from cloud: "${cloudWord.text}"`);
+      }
 
       // Always take cloud's drilled status if it's true (word was learned on another device)
       if (cloudWord.drilled && !localWord.drilled) {
@@ -387,7 +338,7 @@ async function mergeCloudData(cloudData) {
         wordsUpdated++;
       }
     } else {
-      // New word from cloud - add it
+      // New word from cloud - add it (including if deleted)
       const newWord = {
         text: cloudWord.text,
         childId: localChildId,
@@ -397,11 +348,12 @@ async function mergeCloudData(cloudData) {
         successes: cloudWord.successes,
         errors: cloudWord.errors,
         lastPracticed: cloudWord.lastPracticed,
-        createdAt: cloudWord.createdAt
+        createdAt: cloudWord.createdAt,
+        deleted: cloudWord.deleted || false
       };
       await db.words.add(newWord);
       wordsAdded++;
-      console.log(`✅ Added new word from cloud: "${cloudWord.text}" (drilled: ${cloudWord.drilled})`);
+      console.log(`✅ Added new word from cloud: "${cloudWord.text}" (drilled: ${cloudWord.drilled}, deleted: ${cloudWord.deleted || false})`);
     }
   }
 
@@ -516,27 +468,6 @@ async function downloadFromGoogleDrive() {
 }
 
 /**
- * Clean up old deletion records (older than 30 days)
- * This prevents the deletedItems table from growing indefinitely
- */
-async function cleanupOldDeletions() {
-  const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-  const oldDeletions = await db.deletedItems
-    .where('deletedAt')
-    .below(thirtyDaysAgo.toISOString())
-    .toArray();
-
-  if (oldDeletions.length > 0) {
-    console.log(`Cleaning up ${oldDeletions.length} old deletion records...`);
-    for (const deletion of oldDeletions) {
-      await db.deletedItems.delete(deletion.id);
-    }
-  }
-}
-
-/**
  * Sync to cloud (download first, then upload merged data)
  */
 export async function syncToCloud() {
@@ -555,11 +486,9 @@ export async function syncToCloud() {
       await mergeCloudData(cloudData);
     }
 
-    // Clean up old deletion records
-    await cleanupOldDeletions();
-
     // Now export and upload the merged data
     const data = await exportAllData();
+
     await uploadToGoogleDrive(data);
 
     const lastSync = new Date().toISOString();
@@ -594,13 +523,19 @@ export async function syncFromCloud() {
     const cloudData = await downloadFromGoogleDrive();
 
     if (!cloudData) {
-      // No data in cloud, upload current data
+      // No data in cloud - upload local data
+      const localData = await exportAllData();
+      if (localData.children.length === 0) {
+        console.log("No cloud data and no local data - nothing to sync");
+        notifyStatusChange({ syncing: false, connected: true });
+        return { success: true, noData: true };
+      }
       console.log("No cloud data found, uploading local data");
       return await syncToCloud();
     }
 
     // Check if this is the first sync for this device
-    const localChildren = await getChildren();
+    const localChildren = await getAllChildren();
     const hasLocalData = localChildren.length > 0;
 
     if (!hasLocalData) {
@@ -639,16 +574,17 @@ export function getLastSyncTime() {
 }
 
 /**
- * Export data for a single child
+ * Export data for a single child (including soft-deleted words for sync)
  */
 async function exportChildData(childId) {
-  const children = await getChildren();
+  const children = await getAllChildren();
   const child = children.find((c) => c.id === childId);
   if (!child) {
     throw new Error(`Child with ID ${childId} not found`);
   }
 
-  const words = await getWords(childId);
+  // Use getAllWords to include soft-deleted words
+  const words = await getAllWords(childId);
 
   return {
     child: child.toJSON(),
@@ -662,8 +598,8 @@ async function exportChildData(childId) {
 async function mergeChildData(localChildId, cloudChild, cloudWords) {
   console.log(`=== MERGING CHILD: ${cloudChild.name} ===`);
 
-  // Get local words for this child
-  const localWords = await getWords(localChildId);
+  // Get ALL local words for this child (including deleted)
+  const localWords = await getAllWords(localChildId);
   console.log(
     `Local has ${localWords.length} words, cloud has ${cloudWords.length} words`
   );
@@ -680,6 +616,12 @@ async function mergeChildData(localChildId, cloudChild, cloudWords) {
     if (localWord) {
       // Word exists locally - merge data
       const updates = {};
+
+      // Sync deleted flag from cloud
+      if (cloudWord.deleted && !localWord.deleted) {
+        updates.deleted = true;
+        console.log(`🗑️ Marking word as deleted from cloud: "${cloudWord.text}"`);
+      }
 
       // Always take cloud's drilled status if it's true
       if (cloudWord.drilled && !localWord.drilled) {
@@ -718,7 +660,7 @@ async function mergeChildData(localChildId, cloudChild, cloudWords) {
         wordsUpdated++;
       }
     } else {
-      // New word from cloud - add it
+      // New word from cloud - add it (including if deleted)
       const newWord = {
         text: cloudWord.text,
         childId: localChildId,
@@ -730,11 +672,12 @@ async function mergeChildData(localChildId, cloudChild, cloudWords) {
         lastPracticed: cloudWord.lastPracticed,
         createdAt: cloudWord.createdAt,
         audioBlob: cloudWord.audioBlob,
+        deleted: cloudWord.deleted || false,
       };
       await db.words.add(newWord);
       wordsAdded++;
       console.log(
-        `✅ Added new word from cloud: "${cloudWord.text}" (drilled: ${cloudWord.drilled})`
+        `✅ Added new word from cloud: "${cloudWord.text}" (drilled: ${cloudWord.drilled}, deleted: ${cloudWord.deleted || false})`
       );
     }
   }
@@ -757,8 +700,8 @@ export async function syncChildFromCloud(childId) {
   console.log(`[syncChildFromCloud] Starting for childId: ${childId}`);
 
   try {
-    // Get the local child to find their name
-    const children = await getChildren();
+    // Get the local child to find their name (including deleted)
+    const children = await getAllChildren();
     const localChild = children.find((c) => c.id === childId);
     if (!localChild) {
       throw new Error(`Child with ID ${childId} not found locally`);
@@ -803,9 +746,7 @@ export async function syncChildFromCloud(childId) {
  * Sync a single child's data TO cloud
  * Downloads cloud data, updates this child's portion, uploads back
  *
- * SAFETY CHECKS:
- * 1. Never delete cloud words if local has 0 words (preserve cloud data)
- * 2. Only push if local lastModified is newer than cloud lastModified
+ * Only push if local lastModified is newer than cloud lastModified
  */
 export async function syncChildToCloud(childId) {
   if (!isSignedIn()) {
@@ -816,7 +757,7 @@ export async function syncChildToCloud(childId) {
   console.log(`[syncChildToCloud] Starting for childId: ${childId}`);
 
   try {
-    // Get local child data
+    // Get local child data (includes soft-deleted words)
     const localChildData = await exportChildData(childId);
 
     // Download existing cloud data
@@ -825,11 +766,10 @@ export async function syncChildToCloud(childId) {
     if (!cloudData) {
       // No cloud data exists - create initial structure with just this child
       cloudData = {
-        version: 2,
+        version: 3,
         lastSync: new Date().toISOString(),
         children: [localChildData.child],
         words: localChildData.words,
-        deletedItems: [],
       };
     } else {
       // Find or add this child in cloud data
@@ -840,19 +780,8 @@ export async function syncChildToCloud(childId) {
       if (cloudChildIndex >= 0) {
         const cloudChild = cloudData.children[cloudChildIndex];
         const oldCloudChildId = cloudChild.id;
-        const cloudWordsForChild = cloudData.words.filter(
-          (w) => w.childId === oldCloudChildId
-        );
 
-        // SAFETY CHECK 1: Never delete cloud words if local has none
-        if (localChildData.words.length === 0 && cloudWordsForChild.length > 0) {
-          console.warn(
-            `[syncChildToCloud] SAFETY: Preserving ${cloudWordsForChild.length} cloud words (local has none)`
-          );
-          return { success: true, skipped: true, reason: "preserved_cloud_words" };
-        }
-
-        // SAFETY CHECK 2: Only push if local is newer than cloud
+        // Only push if local is newer than cloud
         const localModified = new Date(localChildData.child.lastModified || 0);
         const cloudModified = new Date(cloudChild.lastModified || 0);
 
@@ -899,61 +828,6 @@ export async function syncChildToCloud(childId) {
     return { success: true, lastSync };
   } catch (error) {
     console.error("[syncChildToCloud] Error:", error);
-    return { success: false, error: error.message };
-  }
-}
-
-/**
- * Delete a child's data from cloud
- * Downloads cloud data, removes this child's portion, uploads back
- */
-export async function deleteChildFromCloud(childName) {
-  if (!isSignedIn()) {
-    console.log("Not signed in, skipping child deletion from cloud");
-    return { success: false, reason: "not_signed_in" };
-  }
-
-  console.log(`[deleteChildFromCloud] Starting for child: ${childName}`);
-
-  try {
-    // Download existing cloud data
-    let cloudData = await downloadFromGoogleDrive();
-
-    if (!cloudData) {
-      // No cloud data exists - nothing to delete
-      console.log("[deleteChildFromCloud] No cloud data exists");
-      return { success: true };
-    }
-
-    // Find this child in cloud data
-    const cloudChildIndex = cloudData.children.findIndex(
-      (c) => c.name.toLowerCase() === childName.toLowerCase()
-    );
-
-    if (cloudChildIndex >= 0) {
-      const cloudChildId = cloudData.children[cloudChildIndex].id;
-
-      // Remove child
-      cloudData.children.splice(cloudChildIndex, 1);
-
-      // Remove their words
-      cloudData.words = cloudData.words.filter(
-        (w) => w.childId !== cloudChildId
-      );
-
-      cloudData.lastSync = new Date().toISOString();
-
-      // Upload updated cloud data
-      await uploadToGoogleDrive(cloudData);
-
-      console.log(`[deleteChildFromCloud] Complete for ${childName}`);
-    } else {
-      console.log(`[deleteChildFromCloud] Child ${childName} not found in cloud`);
-    }
-
-    return { success: true };
-  } catch (error) {
-    console.error("[deleteChildFromCloud] Error:", error);
     return { success: false, error: error.message };
   }
 }

@@ -14,6 +14,7 @@ export class Word {
     this.lastPracticed = data.lastPracticed || null;
     this.createdAt = data.createdAt || new Date().toISOString();
     this.audioBlob = data.audioBlob || null; // Cached audio from ElevenLabs (Blob)
+    this.deleted = data.deleted || false; // Soft delete flag
 
     // Sight-reading tracking
     this.sightReadViews = data.sightReadViews || 0; // Times shown in flashcard mode
@@ -34,6 +35,7 @@ export class Word {
       lastPracticed: this.lastPracticed,
       createdAt: this.createdAt,
       audioBlob: this.audioBlob, // Include audioBlob in JSON representation
+      deleted: this.deleted,
       sightReadViews: this.sightReadViews,
       sightReadKnown: this.sightReadKnown,
       lastSightRead: this.lastSightRead

@@ -9,6 +9,7 @@ export class Child {
     this.quizLength = data.quizLength || 10; // Number of words per challenge session
     this.createdAt = data.createdAt || new Date().toISOString();
     this.lastModified = data.lastModified || new Date().toISOString(); // Updated when words/settings change
+    this.deleted = data.deleted || false; // Soft delete flag
   }
 
   toJSON() {
@@ -18,7 +19,8 @@ export class Child {
       inputMethod: this.inputMethod,
       quizLength: this.quizLength,
       createdAt: this.createdAt,
-      lastModified: this.lastModified
+      lastModified: this.lastModified,
+      deleted: this.deleted
     };
   }
 }

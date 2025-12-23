@@ -825,21 +825,21 @@ function attachChildDetailsListeners(container, child, detailsContainer) {
     );
 
     if (confirmText === child.name) {
-      const childName = child.name; // Save before deletion
-      await deleteChild(child.id);
+      const childId = child.id; // Save before deletion
+      await deleteChild(childId);
 
       // Remove from dirty set since child no longer exists
-      dirtyChildIds.delete(child.id);
+      dirtyChildIds.delete(childId);
       currentChildId = null;
 
-      // Remove child's data from cloud
+      // Sync the soft-deleted child to cloud
       if (googleSync.isSignedIn()) {
         try {
-          console.log('Deleting child from cloud...');
-          await googleSync.deleteChildFromCloud(childName);
-          console.log('Child deleted from cloud');
+          console.log('Syncing deleted child to cloud...');
+          await googleSync.syncChildToCloud(childId);
+          console.log('Deleted child synced to cloud');
         } catch (error) {
-          console.error('Error deleting child from cloud:', error);
+          console.error('Error syncing deleted child to cloud:', error);
         }
       }
 

@@ -69,6 +69,8 @@ export async function createChild(childData) {
 }
 
 export async function updateChild(id, updates) {
+  // Always update lastModified when child settings change
+  updates.lastModified = new Date().toISOString();
   await db.children.update(id, updates);
   return await getChild(id);
 }
@@ -136,6 +138,10 @@ export async function createWord(wordData, audioBlob = null) {
 
   const id = await db.words.add(data);
   word.id = id;
+
+  // Update child's lastModified timestamp
+  await db.children.update(word.childId, { lastModified: new Date().toISOString() });
+
   return word;
 }
 
@@ -164,6 +170,9 @@ export async function deleteWord(id) {
   }
 
   await db.words.delete(id);
+
+  // Update child's lastModified timestamp
+  await db.children.update(word.childId, { lastModified: new Date().toISOString() });
 
   // Track deletion for sync (use child name + word text as unique key)
   await db.deletedItems.add({
@@ -281,6 +290,9 @@ export async function recordAttempt(wordId, success, errorCount = 0) {
   };
 
   await db.words.update(wordId, updates);
+
+  // Update child's lastModified timestamp (quiz progress changed)
+  await db.children.update(word.childId, { lastModified: new Date().toISOString() });
 }
 
 /**
@@ -388,6 +400,9 @@ export async function importCommonWords(childId, wordList) {
 
     await db.words.add(data);
   }
+
+  // Update child's lastModified timestamp
+  await db.children.update(childId, { lastModified: new Date().toISOString() });
 
   console.log(`Imported ${newWords.length} new words for child ${childId} (skipped ${wordList.length - newWords.length} duplicates)`);
 

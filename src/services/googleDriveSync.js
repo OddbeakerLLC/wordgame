@@ -802,6 +802,10 @@ export async function syncChildFromCloud(childId) {
 /**
  * Sync a single child's data TO cloud
  * Downloads cloud data, updates this child's portion, uploads back
+ *
+ * SAFETY CHECKS:
+ * 1. Never delete cloud words if local has 0 words (preserve cloud data)
+ * 2. Only push if local lastModified is newer than cloud lastModified
  */
 export async function syncChildToCloud(childId) {
   if (!isSignedIn()) {
@@ -834,8 +838,36 @@ export async function syncChildToCloud(childId) {
       );
 
       if (cloudChildIndex >= 0) {
+        const cloudChild = cloudData.children[cloudChildIndex];
+        const oldCloudChildId = cloudChild.id;
+        const cloudWordsForChild = cloudData.words.filter(
+          (w) => w.childId === oldCloudChildId
+        );
+
+        // SAFETY CHECK 1: Never delete cloud words if local has none
+        if (localChildData.words.length === 0 && cloudWordsForChild.length > 0) {
+          console.warn(
+            `[syncChildToCloud] SAFETY: Preserving ${cloudWordsForChild.length} cloud words (local has none)`
+          );
+          return { success: true, skipped: true, reason: "preserved_cloud_words" };
+        }
+
+        // SAFETY CHECK 2: Only push if local is newer than cloud
+        const localModified = new Date(localChildData.child.lastModified || 0);
+        const cloudModified = new Date(cloudChild.lastModified || 0);
+
+        if (localModified <= cloudModified) {
+          console.log(
+            `[syncChildToCloud] Skipping - cloud is newer or same (cloud: ${cloudModified.toISOString()}, local: ${localModified.toISOString()})`
+          );
+          return { success: true, skipped: true, reason: "cloud_is_newer" };
+        }
+
+        console.log(
+          `[syncChildToCloud] Local is newer - pushing (local: ${localModified.toISOString()}, cloud: ${cloudModified.toISOString()})`
+        );
+
         // Update existing child
-        const oldCloudChildId = cloudData.children[cloudChildIndex].id;
         cloudData.children[cloudChildIndex] = localChildData.child;
 
         // Remove old words for this child and add new ones

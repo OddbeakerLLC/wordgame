@@ -8,6 +8,7 @@ export class Child {
     this.inputMethod = data.inputMethod || 'keyboard'; // 'keyboard' | 'onscreen' | 'hybrid'
     this.quizLength = data.quizLength || 10; // Number of words per challenge session
     this.createdAt = data.createdAt || new Date().toISOString();
+    this.lastModified = data.lastModified || new Date().toISOString(); // Updated when words/settings change
   }
 
   toJSON() {
@@ -16,7 +17,8 @@ export class Child {
       name: this.name,
       inputMethod: this.inputMethod,
       quizLength: this.quizLength,
-      createdAt: this.createdAt
+      createdAt: this.createdAt,
+      lastModified: this.lastModified
     };
   }
 }

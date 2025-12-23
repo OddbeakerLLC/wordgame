@@ -872,6 +872,61 @@ export async function syncChildToCloud(childId) {
 }
 
 /**
+ * Delete a child's data from cloud
+ * Downloads cloud data, removes this child's portion, uploads back
+ */
+export async function deleteChildFromCloud(childName) {
+  if (!isSignedIn()) {
+    console.log("Not signed in, skipping child deletion from cloud");
+    return { success: false, reason: "not_signed_in" };
+  }
+
+  console.log(`[deleteChildFromCloud] Starting for child: ${childName}`);
+
+  try {
+    // Download existing cloud data
+    let cloudData = await downloadFromGoogleDrive();
+
+    if (!cloudData) {
+      // No cloud data exists - nothing to delete
+      console.log("[deleteChildFromCloud] No cloud data exists");
+      return { success: true };
+    }
+
+    // Find this child in cloud data
+    const cloudChildIndex = cloudData.children.findIndex(
+      (c) => c.name.toLowerCase() === childName.toLowerCase()
+    );
+
+    if (cloudChildIndex >= 0) {
+      const cloudChildId = cloudData.children[cloudChildIndex].id;
+
+      // Remove child
+      cloudData.children.splice(cloudChildIndex, 1);
+
+      // Remove their words
+      cloudData.words = cloudData.words.filter(
+        (w) => w.childId !== cloudChildId
+      );
+
+      cloudData.lastSync = new Date().toISOString();
+
+      // Upload updated cloud data
+      await uploadToGoogleDrive(cloudData);
+
+      console.log(`[deleteChildFromCloud] Complete for ${childName}`);
+    } else {
+      console.log(`[deleteChildFromCloud] Child ${childName} not found in cloud`);
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error("[deleteChildFromCloud] Error:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
  * Notify status change
  */
 function notifyStatusChange(status) {

@@ -6,6 +6,44 @@ import { generateAudioBulk } from '../services/ttsGenerator.js';
 import { getAudioForWord } from '../services/audioLoader.js';
 import { loadCommonWordsAudioFromServer, convertAudioDataToBlobs } from '../services/audioLoader.js';
 
+// Track which children have unsaved changes that need syncing
+let dirtyChildIds = new Set();
+let currentChildId = null;
+
+/**
+ * Mark a child as having unsaved changes
+ */
+function markChildDirty(childId) {
+  if (childId) {
+    dirtyChildIds.add(childId);
+    console.log(`Child ${childId} marked dirty for sync`);
+  }
+}
+
+/**
+ * Sync a child if dirty, then clear the dirty flag
+ */
+async function syncChildIfDirty(childId) {
+  if (!childId || !dirtyChildIds.has(childId)) {
+    return;
+  }
+
+  if (!googleSync.isSignedIn()) {
+    dirtyChildIds.delete(childId);
+    return;
+  }
+
+  try {
+    console.log(`Syncing dirty child ${childId} to cloud...`);
+    await googleSync.syncChildToCloud(childId);
+    dirtyChildIds.delete(childId);
+    console.log(`Child ${childId} synced successfully`);
+  } catch (error) {
+    console.error(`Error syncing child ${childId}:`, error);
+    // Keep it dirty so we try again later
+  }
+}
+
 /**
  * Generate a random simple math problem with a 1-digit answer
  */
@@ -257,17 +295,12 @@ async function showParentTeacherInterface(container, onBack, selectedChildId) {
   container.querySelector('#back-btn').addEventListener('click', async () => {
     audio.playClick();
 
-    // Sync to cloud before leaving if connected
-    if (googleSync.isSignedIn()) {
-      try {
-        console.log('Syncing to cloud before exiting Parent/Teacher mode...');
-        await googleSync.syncToCloud();
-        console.log('Sync complete');
-      } catch (error) {
-        console.error('Error syncing to cloud on exit:', error);
-        // Continue exiting even if sync fails
-      }
-    }
+    // Sync current child if they have unsaved changes
+    await syncChildIfDirty(currentChildId);
+
+    // Clear state on exit
+    currentChildId = null;
+    dirtyChildIds.clear();
 
     onBack();
   });
@@ -293,7 +326,11 @@ async function showParentTeacherInterface(container, onBack, selectedChildId) {
     audio.playClick();
     const selectedValue = childSelect.value;
 
+    // Sync previous child if they have unsaved changes
+    await syncChildIfDirty(currentChildId);
+
     if (selectedValue === 'add-new') {
+      currentChildId = null;
       showAddChildForm(container, onBack);
     } else {
       await loadChildDetails(container, parseInt(selectedValue));
@@ -404,6 +441,9 @@ async function loadChildDetails(container, childId) {
   const children = await getChildren();
   const child = children.find(c => c.id === childId);
   if (!child) return;
+
+  // Track which child is currently being viewed
+  currentChildId = childId;
 
   const words = await getWords(childId);
   const detailsContainer = container.querySelector('#child-details');
@@ -569,6 +609,7 @@ function attachChildDetailsListeners(container, child, detailsContainer) {
     const quizLength = parseInt(detailsContainer.querySelector('#quiz-length').value);
 
     await updateChild(child.id, { inputMethod, quizLength });
+    markChildDirty(child.id);
 
     // Show feedback
     const btn = detailsContainer.querySelector('#save-settings-btn');
@@ -648,6 +689,11 @@ function attachChildDetailsListeners(container, child, detailsContainer) {
           wordsWithAudio.length > 0 ? wordsWithAudio : COMMON_WORDS
         );
 
+        // Mark child as having changes if words were added
+        if (result.added > 0) {
+          markChildDirty(child.id);
+        }
+
         // Show success feedback
         audio.playSuccess();
         btn.textContent = `Added ${result.added} word${result.added !== 1 ? 's' : ''}!`;
@@ -726,6 +772,9 @@ function attachChildDetailsListeners(container, child, detailsContainer) {
         // Create word with audio blob (or null if generation failed)
         await createWord({ text: wordText, childId: child.id }, audioBlob);
 
+        // Mark child as having changes
+        markChildDirty(child.id);
+
         input.value = '';
 
         // Reload child details
@@ -759,6 +808,7 @@ function attachChildDetailsListeners(container, child, detailsContainer) {
 
       if (confirm('Are you sure you want to delete this word?')) {
         await deleteWord(wordId);
+        markChildDirty(child.id);
         await loadChildDetails(container, child.id);
         audio.playSuccess();
       }
@@ -775,7 +825,24 @@ function attachChildDetailsListeners(container, child, detailsContainer) {
     );
 
     if (confirmText === child.name) {
+      const childName = child.name; // Save before deletion
       await deleteChild(child.id);
+
+      // Remove from dirty set since child no longer exists
+      dirtyChildIds.delete(child.id);
+      currentChildId = null;
+
+      // Remove child's data from cloud
+      if (googleSync.isSignedIn()) {
+        try {
+          console.log('Deleting child from cloud...');
+          await googleSync.deleteChildFromCloud(childName);
+          console.log('Child deleted from cloud');
+        } catch (error) {
+          console.error('Error deleting child from cloud:', error);
+        }
+      }
+
       audio.playSuccess();
 
       // Reload the parent interface completely

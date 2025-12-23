@@ -164,9 +164,7 @@ async function render(container, child, state, onComplete) {
   const exitBtn = container.querySelector("#exit-quiz-btn");
   exitBtn.addEventListener("click", () => {
     audio.playClick();
-    // Set exit flag to stop any async operations
-    state.exiting = true;
-    // Stop any ongoing TTS
+    // Stop any ongoing speech
     tts.stop();
     // Clean up any keyboard listeners
     if (state.practiceState?.keyHandler) {
@@ -220,9 +218,7 @@ async function teachNewWord(
 
   // Speak the prompt (uses cached ElevenLabs audio if available)
   await tts.speakPrompt("Let's learn a new word");
-  if (state.exiting) return;
   await sleep(500);
-  if (state.exiting) return;
 
   // Phase 2: Showing - Display and speak the word
   content.innerHTML = `
@@ -235,9 +231,7 @@ async function teachNewWord(
     </div>
   `;
   await tts.speakWord(word.text, word.audioBlob);
-  if (state.exiting) return;
   await sleep(1000);
-  if (state.exiting) return;
 
   // Phase 3: Spelling - Spell out letter by letter
   content.innerHTML = `
@@ -264,14 +258,11 @@ async function teachNewWord(
   // Spell out each letter with highlighting
   const letters = word.text.split("");
   for (let i = 0; i < letters.length; i++) {
-    if (state.exiting) return;
     const letterBox = content.querySelector(`#letter-${i}`);
     letterBox.classList.add("filled");
     await tts.speakLetter(letters[i]);
   }
-  if (state.exiting) return;
   await sleep(1000);
-  if (state.exiting) return;
 
   // Phase 4: Practice - Now you try!
   await renderQuizTest(content, word, child, state, container, onComplete);
@@ -331,11 +322,8 @@ async function renderQuizTest(
 
   // Speak "Spell {word}"
   await tts.speakPrompt("Spell");
-  if (state.exiting) return;
   await sleep(300); // Small pause between "Spell" and the word
-  if (state.exiting) return;
   await tts.speakWord(word.text, word.audioBlob);
-  if (state.exiting) return;
 
   // Set up practice state
   const practiceState = {
@@ -350,17 +338,14 @@ async function renderQuizTest(
   // Repeat button - disable while speaking to prevent spam clicks
   const repeatBtn = content.querySelector("#repeat-btn");
   repeatBtn.addEventListener("click", async () => {
-    if (repeatBtn.disabled || state.exiting) return;
+    if (repeatBtn.disabled) return;
     repeatBtn.disabled = true;
     repeatBtn.classList.add("opacity-50", "cursor-not-allowed");
 
     audio.playClick();
     await tts.speakPrompt("Spell");
-    if (state.exiting) return;
     await sleep(300);
-    if (state.exiting) return;
     await tts.speakWord(word.text, word.audioBlob);
-    if (state.exiting) return;
 
     repeatBtn.disabled = false;
     repeatBtn.classList.remove("opacity-50", "cursor-not-allowed");
@@ -686,13 +671,9 @@ async function renderComplete(container, state, child, onComplete) {
 
   // Speak the transition
   await tts.speakPrompt("Great spelling");
-  if (state.exiting) return;
   await sleep(500);
-  if (state.exiting) return;
   await tts.speakPrompt("Now let's read");
-  if (state.exiting) return;
   await sleep(1000);
-  if (state.exiting) return;
 
   // Start reading phase
   renderReadingCard(container, state, child, onComplete);
@@ -765,9 +746,7 @@ async function renderReadingCard(container, state, child, onComplete) {
   // Exit button handler
   container.querySelector("#exit-reading-btn").addEventListener("click", () => {
     audio.playClick();
-    // Set exit flag to stop any async operations
-    state.exiting = true;
-    // Stop any ongoing TTS
+    // Stop any ongoing speech
     tts.stop();
     onComplete();
   });
@@ -778,20 +757,18 @@ async function renderReadingCard(container, state, child, onComplete) {
   } else {
     await tts.speakPrompt("Here is the next word");
   }
-  if (state.exiting) return;
 
   // "Hear the answer" button - reveals assessment options
   const hearAnswerBtn = container.querySelector("#hear-answer-btn");
   const assessmentButtons = container.querySelector("#assessment-buttons");
 
   hearAnswerBtn.addEventListener("click", async () => {
-    if (hearAnswerBtn.disabled || state.exiting) return;
+    if (hearAnswerBtn.disabled) return;
     hearAnswerBtn.disabled = true;
     hearAnswerBtn.classList.add("opacity-50", "cursor-not-allowed");
 
     audio.playClick();
     await tts.speakWord(currentWord.word, currentWord.audioBlob);
-    if (state.exiting) return;
 
     // Hide "hear answer" button, show assessment buttons
     hearAnswerBtn.classList.add("hidden");
@@ -807,13 +784,12 @@ async function renderReadingCard(container, state, child, onComplete) {
   // "Hear it again" button
   const hearAgainBtn = container.querySelector("#hear-again-btn");
   hearAgainBtn.addEventListener("click", async () => {
-    if (hearAgainBtn.disabled || state.exiting) return;
+    if (hearAgainBtn.disabled) return;
     hearAgainBtn.disabled = true;
     hearAgainBtn.classList.add("opacity-50", "cursor-not-allowed");
 
     audio.playClick();
     await tts.speakWord(currentWord.word, currentWord.audioBlob);
-    if (state.exiting) return;
 
     hearAgainBtn.disabled = false;
     hearAgainBtn.classList.remove("opacity-50", "cursor-not-allowed");

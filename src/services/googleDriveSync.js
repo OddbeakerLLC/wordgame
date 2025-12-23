@@ -156,6 +156,25 @@ export function isSignedIn() {
 }
 
 /**
+ * Clear invalid/expired token and notify UI
+ * Called when we get a 401 Unauthorized error
+ */
+function handleExpiredToken() {
+  console.log("Token expired or invalid, clearing auth state");
+  accessToken = null;
+  gapi.client.setToken(null);
+  localStorage.removeItem("wordmaster-google-token");
+  notifyStatusChange({ connected: false, lastSync: null, tokenExpired: true });
+}
+
+/**
+ * Check if an error is a 401 Unauthorized error
+ */
+function isUnauthorizedError(error) {
+  return error?.status === 401 || error?.result?.error?.code === 401;
+}
+
+/**
  * Export all data from IndexedDB
  */
 async function exportAllData() {
@@ -407,6 +426,9 @@ async function findSyncFile() {
     return null;
   } catch (error) {
     console.error("Error finding sync file:", error);
+    if (isUnauthorizedError(error)) {
+      handleExpiredToken();
+    }
     throw error;
   }
 }
@@ -415,68 +437,82 @@ async function findSyncFile() {
  * Upload data to Google Drive
  */
 async function uploadToGoogleDrive(data) {
-  const file = await findSyncFile();
-  const metadata = {
-    name: SYNC_FILE_NAME,
-    mimeType: "application/json",
-  };
+  try {
+    const file = await findSyncFile();
+    const metadata = {
+      name: SYNC_FILE_NAME,
+      mimeType: "application/json",
+    };
 
-  if (!file) {
-    // Create new file in appDataFolder
-    metadata.parents = ["appDataFolder"];
+    if (!file) {
+      // Create new file in appDataFolder
+      metadata.parents = ["appDataFolder"];
+    }
+
+    const boundary = "-------314159265358979323846";
+    const delimiter = "\r\n--" + boundary + "\r\n";
+    const close_delim = "\r\n--" + boundary + "--";
+
+    const contentType = "application/json";
+    const body = JSON.stringify(data);
+
+    const multipartRequestBody =
+      delimiter +
+      "Content-Type: application/json\r\n\r\n" +
+      JSON.stringify(metadata) +
+      delimiter +
+      "Content-Type: " +
+      contentType +
+      "\r\n\r\n" +
+      body +
+      close_delim;
+
+    const method = file ? "PATCH" : "POST";
+    const path = file
+      ? `/upload/drive/v3/files/${file.id}`
+      : "/upload/drive/v3/files";
+
+    const response = await gapi.client.request({
+      path: path,
+      method: method,
+      params: { uploadType: "multipart" },
+      headers: {
+        "Content-Type": 'multipart/related; boundary="' + boundary + '"',
+      },
+      body: multipartRequestBody,
+    });
+
+    return response.result;
+  } catch (error) {
+    if (isUnauthorizedError(error)) {
+      handleExpiredToken();
+    }
+    throw error;
   }
-
-  const boundary = "-------314159265358979323846";
-  const delimiter = "\r\n--" + boundary + "\r\n";
-  const close_delim = "\r\n--" + boundary + "--";
-
-  const contentType = "application/json";
-  const body = JSON.stringify(data);
-
-  const multipartRequestBody =
-    delimiter +
-    "Content-Type: application/json\r\n\r\n" +
-    JSON.stringify(metadata) +
-    delimiter +
-    "Content-Type: " +
-    contentType +
-    "\r\n\r\n" +
-    body +
-    close_delim;
-
-  const method = file ? "PATCH" : "POST";
-  const path = file
-    ? `/upload/drive/v3/files/${file.id}`
-    : "/upload/drive/v3/files";
-
-  const response = await gapi.client.request({
-    path: path,
-    method: method,
-    params: { uploadType: "multipart" },
-    headers: {
-      "Content-Type": 'multipart/related; boundary="' + boundary + '"',
-    },
-    body: multipartRequestBody,
-  });
-
-  return response.result;
 }
 
 /**
  * Download data from Google Drive
  */
 async function downloadFromGoogleDrive() {
-  const file = await findSyncFile();
-  if (!file) {
-    return null;
+  try {
+    const file = await findSyncFile();
+    if (!file) {
+      return null;
+    }
+
+    const response = await gapi.client.drive.files.get({
+      fileId: file.id,
+      alt: "media",
+    });
+
+    return response.result;
+  } catch (error) {
+    if (isUnauthorizedError(error)) {
+      handleExpiredToken();
+    }
+    throw error;
   }
-
-  const response = await gapi.client.drive.files.get({
-    fileId: file.id,
-    alt: "media",
-  });
-
-  return response.result;
 }
 
 /**
@@ -855,9 +891,24 @@ export async function autoInit() {
     // Check if we have a stored token (from previous session)
     const storedToken = localStorage.getItem("wordmaster-google-token");
     if (storedToken) {
-      // Note: Token might be expired, will need to re-authenticate if so
+      // Token might be expired - set it and validate
       accessToken = storedToken;
       gapi.client.setToken({ access_token: accessToken });
+
+      // Validate the token by making a simple API call
+      try {
+        await gapi.client.drive.files.list({
+          spaces: "appDataFolder",
+          pageSize: 1,
+          fields: "files(id)",
+        });
+        console.log("Stored token is valid");
+      } catch (error) {
+        if (isUnauthorizedError(error)) {
+          console.log("Stored token expired, clearing auth state");
+          handleExpiredToken();
+        }
+      }
     }
 
     return true;

@@ -7,7 +7,7 @@
     "dev": "npm run dev:vite & npm run dev:php",
     "dev:vite": "vite",
     "dev:php": "cd api && php -S localhost:8080",
-    "build": "vite build && cp -r dist/* ../oddbeaker.com/wordmaster/",
+    "build": "vite build && cp -r dist/* ../oddbeaker.com/wordmaster/ && cp -r api ../oddbeaker.com/wordmaster/",
     "preview": "vite preview"
   },
   "keywords": [

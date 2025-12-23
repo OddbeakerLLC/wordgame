@@ -419,6 +419,12 @@ function attachQuizListeners(
   // Keyboard input (always available in hybrid mode)
   if (child.inputMethod !== "onscreen") {
     const keyHandler = (e) => {
+      // Check if quiz content still exists (prevents ghost listeners after navigation)
+      if (!document.getElementById("quiz-content")) {
+        // Quiz is no longer on screen, remove this listener
+        document.removeEventListener("keydown", keyHandler);
+        return;
+      }
       if (e.key.length === 1 && e.key.match(/[a-z]/i)) {
         e.preventDefault();
         if (practiceState.processing) return;

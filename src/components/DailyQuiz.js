@@ -757,12 +757,10 @@ async function renderReadingCard(container, state, child, onComplete) {
     onComplete();
   });
 
-  // Speak the instruction for first card or "Here is the next word" for subsequent cards
-  if (state.readingIndex === 0) {
-    await tts.speakPrompt("Read this word out loud then check your answer");
-  } else {
-    await tts.speakPrompt("Here is the next word");
-  }
+  // Speak "What does [letters] spell?"
+  await tts.speakPrompt("What does");
+  await tts.spellWord(currentWord.word);
+  await tts.speakPrompt("spell");
 
   // "Hear the answer" button - reveals assessment options
   const hearAnswerBtn = container.querySelector("#hear-answer-btn");
@@ -774,6 +772,11 @@ async function renderReadingCard(container, state, child, onComplete) {
     hearAnswerBtn.classList.add("opacity-50", "cursor-not-allowed");
 
     audio.playClick();
+
+    // Say "CAT. C A T spells cat. Did you get it?"
+    await tts.speakWord(currentWord.word, currentWord.audioBlob);
+    await tts.spellWord(currentWord.word);
+    await tts.speakPrompt("spells");
     await tts.speakWord(currentWord.word, currentWord.audioBlob);
 
     // Hide "hear answer" button, show assessment buttons

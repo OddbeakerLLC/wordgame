@@ -230,8 +230,8 @@ class TTSService {
     const letters = word.split('');
 
     for (let i = 0; i < letters.length; i++) {
-      // Spell each letter with a small pause
-      await this.speak(letters[i], { rate: 0.8 });
+      // Spell each letter using cached audio
+      await this.speakLetter(letters[i]);
       // Add a small delay between letters
       if (i < letters.length - 1) {
         await new Promise(resolve => setTimeout(resolve, 300));

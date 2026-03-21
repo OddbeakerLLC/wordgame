@@ -1,6 +1,6 @@
 # Audio Preloading Guide
 
-This guide explains how to pre-generate and host audio files so you never need to call the ElevenLabs API again during runtime.
+This guide explains how to pre-generate and host audio files so you never need to call the Google Cloud TTS API again during runtime.
 
 ## Overview
 
@@ -11,7 +11,7 @@ Instead of generating audio on-demand (which uses your API quota), you can:
 3. **Host them statically** on your server
 4. **Load automatically** when the app starts
 
-This gives you high-quality ElevenLabs audio with:
+This gives you high-quality Google Cloud TTS audio with:
 - ✅ No runtime API calls
 - ✅ No ongoing costs
 - ✅ Instant loading (cached in app)
@@ -208,4 +208,4 @@ But requires more code changes. Current JSON approach is simpler for now.
 
 ---
 
-**Questions?** Check the main [ELEVENLABS-TTS.md](./ELEVENLABS-TTS.md) documentation.
+**Questions?** Check the project documentation for more details.

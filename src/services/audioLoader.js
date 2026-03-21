@@ -6,7 +6,7 @@
  * 1. Generate audio once using the bulk tools
  * 2. Host the JSON files on your server
  * 3. Load them automatically when the app starts
- * 4. Never need to regenerate (or use ElevenLabs API) again!
+ * 4. Never need to regenerate (or use Google Cloud TTS API) again!
  */
 
 import { loadSystemAudio } from './systemAudio.js';
@@ -178,7 +178,7 @@ export async function backfillWordAudio(words) {
 }
 
 /**
- * Get audio for a word, checking cache first then falling back to ElevenLabs
+ * Get audio for a word, checking cache first then falling back to Google Cloud TTS
  * @param {string} text - Word text
  * @returns {Promise<Blob|null>} - Audio blob or null if not available
  */
@@ -192,8 +192,8 @@ export async function getAudioForWord(text) {
     return cachedBlob;
   }
 
-  // Not in cache - generate via ElevenLabs
-  console.log(`Generating audio via ElevenLabs for: ${text}`);
+  // Not in cache - generate via Google Cloud TTS
+  console.log(`Generating audio via Google Cloud TTS for: ${text}`);
   const { generateAudio } = await import('./ttsGenerator.js');
   const audioBlob = await generateAudio(text);
 

@@ -13,7 +13,7 @@ export class Word {
     this.errors = data.errors || 0; // Total errors made
     this.lastPracticed = data.lastPracticed || null;
     this.createdAt = data.createdAt || new Date().toISOString();
-    this.audioBlob = data.audioBlob || null; // Cached audio from ElevenLabs (Blob)
+    this.audioBlob = data.audioBlob || null; // Cached TTS audio (Blob)
     this.deleted = data.deleted || false; // Soft delete flag
 
     // Sight-reading tracking

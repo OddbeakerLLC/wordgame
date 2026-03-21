@@ -11,7 +11,7 @@ db.version(1).stores({
   words: '++id, childId, position, drilled, createdAt, [childId+position]'
 });
 
-// Version 2: Add audioBlob support for ElevenLabs TTS caching
+// Version 2: Add audioBlob support for TTS audio caching
 db.version(2).stores({
   children: '++id, name, createdAt',
   words: '++id, childId, position, drilled, createdAt, [childId+position]'
@@ -28,6 +28,18 @@ db.version(3).stores({
   deletedItems: '++id, itemType, itemKey, deletedAt' // Track deletions for sync
 }).upgrade(tx => {
   console.log('Database upgraded to version 3 (deletion tracking added)');
+});
+
+// Version 4: Clear cached audio blobs (migrated from ElevenLabs to Google Cloud TTS)
+db.version(4).stores({
+  children: '++id, name, createdAt',
+  words: '++id, childId, position, drilled, createdAt, [childId+position]',
+  deletedItems: '++id, itemType, itemKey, deletedAt'
+}).upgrade(tx => {
+  console.log('Database upgrade v4: Clearing old cached audio for TTS migration');
+  return tx.table('words').toCollection().modify(word => {
+    word.audioBlob = null;
+  });
 });
 
 /**

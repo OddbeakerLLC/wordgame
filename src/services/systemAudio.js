@@ -35,7 +35,7 @@ export function loadSystemAudio(audioData) {
         // Store with type prefix for easier lookup
         const key = item.type === 'letter'
           ? `letter:${item.text.toUpperCase()}`
-          : `prompt:${item.text}`;
+          : `prompt:${item.text.toLowerCase()}`;
 
         systemAudioCache[key] = blob;
       } catch (error) {
@@ -105,7 +105,7 @@ export function getLetterAudio(letter) {
  * @returns {Blob|null} - Audio blob or null if not found
  */
 export function getPromptAudio(prompt) {
-  const key = `prompt:${prompt}`;
+  const key = `prompt:${prompt.toLowerCase()}`;
   return systemAudioCache[key] || null;
 }
 
@@ -134,5 +134,5 @@ export function getAvailableLetters() {
 export function getAvailablePrompts() {
   return Object.keys(systemAudioCache)
     .filter(key => key.startsWith('prompt:'))
-    .map(key => key.replace('prompt:', ''));
+    .map(key => key.replace('prompt:', '').toLowerCase());
 }

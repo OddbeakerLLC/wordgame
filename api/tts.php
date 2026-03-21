@@ -1,6 +1,6 @@
 <?php
 /**
- * ElevenLabs TTS Proxy
+ * Google Cloud TTS Proxy
  * Generates speech audio for words and returns as base64-encoded MP3
  */
 
@@ -8,7 +8,7 @@
 error_reporting(0); // Disable error reporting completely
 ini_set('display_errors', '0'); // Don't display errors
 ini_set('log_errors', '1'); // Log errors instead
-ini_set('error_log', '/tmp/elevenlabs_tts_errors.log'); // Log to file
+ini_set('error_log', '/tmp/google_tts_errors.log'); // Log to file
 
 // Set response headers (must be before any output)
 header('Access-Control-Allow-Origin: *'); // Allow all origins
@@ -31,15 +31,13 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 // Get API key from environment or config
-// IMPORTANT: Store your API key in a .env file or config outside the public directory
-// For now, you can set it here temporarily (but move it later!)
-$apiKey = getenv('ELEVENLABS_API_KEY');
+$apiKey = getenv('GOOGLE_TTS_API_KEY');
 if (!$apiKey) {
     // Fallback: check for config file
     $configFile = __DIR__ . '/../config.php';
     if (file_exists($configFile)) {
         require_once $configFile;
-        $apiKey = defined('ELEVENLABS_API_KEY') ? ELEVENLABS_API_KEY : '';
+        $apiKey = defined('GOOGLE_TTS_API_KEY') ? GOOGLE_TTS_API_KEY : '';
     }
 }
 
@@ -66,31 +64,40 @@ if (strlen($text) > 500) {
     exit;
 }
 
-// ElevenLabs API configuration
-// Voice ID: Rachel (child-friendly, clear pronunciation)
-// You can change this to other voices from ElevenLabs
-$voiceId = 'EXAVITQu4vr4xnSDxMaL'; // Rachel voice
-$url = "https://api.elevenlabs.io/v1/text-to-speech/{$voiceId}";
+// Google Cloud TTS API configuration
+$url = "https://texttospeech.googleapis.com/v1/text:synthesize?key=" . urlencode($apiKey);
+
+// Use SSML for single letters to get proper letter name pronunciation
+$isSingleLetter = strlen($text) === 1 && ctype_alpha($text);
+
+if ($isSingleLetter) {
+    $ssml = '<speak><say-as interpret-as="characters">' . htmlspecialchars($text) . '</say-as></speak>';
+    $inputField = ['ssml' => $ssml];
+} else {
+    $inputField = ['text' => $text];
+}
 
 // Request payload
 $payload = [
-    'text' => $text,
-    'model_id' => 'eleven_turbo_v2_5', // Updated model for free tier
-    'voice_settings' => [
-        'stability' => 0.5,
-        'similarity_boost' => 0.5,
-        'style' => 0.0,
-        'use_speaker_boost' => true
+    'input' => $inputField,
+    'voice' => [
+        'languageCode' => 'en-US',
+        'name' => 'en-US-Studio-O', // High-quality female voice, child-friendly
+        'ssmlGender' => 'FEMALE'
+    ],
+    'audioConfig' => [
+        'audioEncoding' => 'MP3',
+        'speakingRate' => 0.95, // Slightly slower for clarity
+        'pitch' => 1.0
     ]
 ];
 
-// Make API request using file_get_contents (no cURL required!)
+// Make API request
 $options = [
     'http' => [
         'method' => 'POST',
         'header' => [
-            'Content-Type: application/json',
-            'xi-api-key: ' . $apiKey
+            'Content-Type: application/json'
         ],
         'content' => json_encode($payload),
         'timeout' => 30,
@@ -115,24 +122,32 @@ if (isset($http_response_header)) {
 // Handle errors
 if ($response === false) {
     http_response_code(500);
-    echo json_encode(['error' => 'Network error: Failed to connect to ElevenLabs API']);
+    echo json_encode(['error' => 'Network error: Failed to connect to Google Cloud TTS API']);
     exit;
 }
 
 if ($httpCode !== 200) {
     http_response_code($httpCode);
-    // Try to parse error from ElevenLabs
+    // Try to parse error from Google
     $errorData = json_decode($response, true);
-    $errorMsg = isset($errorData['detail']['message'])
-        ? $errorData['detail']['message']
+    $errorMsg = isset($errorData['error']['message'])
+        ? $errorData['error']['message']
         : 'TTS generation failed';
     echo json_encode(['error' => $errorMsg]);
+    exit;
+}
+
+// Parse Google's response (returns base64 audio content directly)
+$responseData = json_decode($response, true);
+if (!isset($responseData['audioContent'])) {
+    http_response_code(500);
+    echo json_encode(['error' => 'Invalid response from Google Cloud TTS']);
     exit;
 }
 
 // Success! Return audio as base64 for easy IndexedDB storage
 echo json_encode([
     'success' => true,
-    'audio' => base64_encode($response),
+    'audio' => $responseData['audioContent'],
     'text' => $text
 ]);

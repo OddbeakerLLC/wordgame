@@ -19,7 +19,7 @@ $apiKeySet = false;
 
 if ($configExists) {
     require_once __DIR__ . '/../config.php';
-    $apiKeySet = defined('ELEVENLABS_API_KEY') && !empty(ELEVENLABS_API_KEY) && ELEVENLABS_API_KEY !== 'your-api-key-here';
+    $apiKeySet = defined('GOOGLE_TTS_API_KEY') && !empty(GOOGLE_TTS_API_KEY) && GOOGLE_TTS_API_KEY !== 'your-api-key-here';
 }
 
 echo json_encode([

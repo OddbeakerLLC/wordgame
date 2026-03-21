@@ -1,10 +1,10 @@
 /**
  * TTS Generator Service
- * Handles generating audio via ElevenLabs API (through PHP proxy)
+ * Handles generating audio via Google Cloud TTS API (through PHP proxy)
  */
 
 /**
- * Generate audio for a word via ElevenLabs API
+ * Generate audio for a word via Google Cloud TTS API
  * @param {string} text - Text to generate audio for
  * @returns {Promise<Blob|null>} - Audio blob or null if generation failed
  */
@@ -21,14 +21,14 @@ export async function generateAudio(text) {
 
     if (!response.ok) {
       const error = await response.json();
-      console.warn(`ElevenLabs TTS failed for "${text}":`, error.error);
+      console.warn(`Google Cloud TTS failed for "${text}":`, error.error);
       return null;
     }
 
     const data = await response.json();
 
     if (!data.success || !data.audio) {
-      console.warn(`ElevenLabs TTS failed for "${text}": Invalid response`);
+      console.warn(`Google Cloud TTS failed for "${text}": Invalid response`);
       return null;
     }
 
@@ -44,7 +44,7 @@ export async function generateAudio(text) {
     return blob;
 
   } catch (error) {
-    console.warn(`ElevenLabs TTS error for "${text}":`, error);
+    console.warn(`Google Cloud TTS error for "${text}":`, error);
     return null;
   }
 }

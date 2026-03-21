@@ -651,7 +651,7 @@ function attachChildDetailsListeners(container, child, detailsContainer) {
           // No cached audio available, ask user what to do
           const shouldGenerateAudio = confirm(
             'Generate audio for all words?\n\n' +
-            'YES: Generate high-quality audio (takes 2-5 minutes, uses ElevenLabs API)\n' +
+            'YES: Generate high-quality audio (takes 2-5 minutes, uses Google Cloud TTS)\n' +
             'NO: Use device text-to-speech (instant, free)\n\n' +
             'You can always generate audio later by using the bulk generation tool.'
           );
@@ -763,7 +763,7 @@ function attachChildDetailsListeners(container, child, detailsContainer) {
         const originalBtnText = submitBtn.textContent;
         submitBtn.textContent = 'Generating audio...';
 
-        // Get audio (checks cache first, then falls back to ElevenLabs)
+        // Get audio (checks cache first, then falls back to Google Cloud TTS)
         const audioBlob = await getAudioForWord(wordText);
 
         // Update button text

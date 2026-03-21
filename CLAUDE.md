@@ -379,6 +379,19 @@ npm run preview         # Preview production build
 5. **PWA not installing**: Check that icons exist and service worker registered
 6. **Audio not playing**: Check browser autoplay policies (user interaction required)
 
+## TTS Implementation
+
+The app uses Google Cloud TTS for high-quality audio generation:
+- `api/tts.php` proxies requests to Google Cloud TTS API (configured via `config.php` with `GOOGLE_TTS_API_KEY`)
+- Single letters use SSML `<say-as interpret-as="characters">` for correct letter name pronunciation
+- Pre-generated audio data files (`public/data/system-audio.json`, `public/data/common-words-audio.json`) provide instant audio without runtime API calls
+- The `public/sounds/letter-*.mp3` files are Google Cloud TTS generated
+
+### Deployment
+- `npm run build` runs: `vite build && cp -r dist/* ../oddbeaker.com/wordmaster/ && cp -r api ../oddbeaker.com/wordmaster/ && cp config.php ../oddbeaker.com/wordmaster/`
+- The oddbeaker.com repo is then deployed via `git push origin master`
+- The service worker uses `skipWaiting()` + `clientsClaim()` so existing users get updates on next app load
+
 ## Future Enhancements (TODO)
 
 - 3D visual effects with three.js (celebration animations)

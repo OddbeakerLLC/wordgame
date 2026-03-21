@@ -189,10 +189,10 @@ class TTSService {
   /**
    * Speak a word (with optional cached audio blob)
    * @param {string} word - The word text to speak
-   * @param {Blob|null} audioBlob - Optional pre-generated audio blob from ElevenLabs
+   * @param {Blob|null} audioBlob - Optional pre-generated audio blob from Google Cloud TTS
    */
   async speakWord(word, audioBlob = null) {
-    // If we have cached audio from ElevenLabs, use it for better quality
+    // If we have cached audio from Google Cloud TTS, use it for better quality
     if (audioBlob && audioBlob instanceof Blob) {
       try {
         const audioUrl = URL.createObjectURL(audioBlob);
@@ -276,7 +276,7 @@ class TTSService {
    * @param {string} prompt - The prompt text (e.g., "Let's learn a new word")
    */
   async speakPrompt(prompt) {
-    // Try to use cached ElevenLabs audio first
+    // Try to use cached Google Cloud TTS audio first
     const audioBlob = getPromptAudio(prompt);
     if (audioBlob) {
       try {

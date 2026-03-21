@@ -66,7 +66,7 @@ export async function renderDailyQuiz(container, child, onComplete) {
   let allWords = await getWords(child.id);
 
   // Backfill audio for words that don't have audioBlob
-  // This ensures we use ElevenLabs audio from common-words-audio.json
+  // This ensures we use pre-generated audio from common-words-audio.json
   // or generates it on-demand for custom words
   allWords = await backfillWordAudio(allWords);
 
@@ -216,7 +216,7 @@ async function teachNewWord(
     </div>
   `;
 
-  // Speak the prompt (uses cached ElevenLabs audio if available)
+  // Speak the prompt (uses cached Google Cloud TTS audio if available)
   await tts.speakPrompt("Let's learn a new word");
   await sleep(500);
 

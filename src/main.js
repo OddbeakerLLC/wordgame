@@ -53,6 +53,17 @@ async function init() {
   }
 }
 
+// When a new service worker takes over, reload to get fresh cached assets
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    // Only reload if we had a previous controller (not first install)
+    if (navigator.serviceWorker.controller) {
+      console.log('New service worker activated, reloading for fresh assets...');
+      window.location.reload();
+    }
+  });
+}
+
 // Start the app when DOM is ready
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', init);
